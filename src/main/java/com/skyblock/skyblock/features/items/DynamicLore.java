@@ -2,13 +2,7 @@ package com.skyblock.skyblock.features.items;
 
 import com.skyblock.skyblock.utilities.item.ItemBase;
 import de.tr7zw.nbtapi.NBTItem;
-import org.bukkit.entity.Player;
-import org.bukkit.event.Listener;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.PlayerInventory;
 
-import java.util.Arrays;
 import java.util.List;
 
 public interface DynamicLore {
@@ -29,17 +23,19 @@ public interface DynamicLore {
             }
         }
 
-        for (String s : ability) {
-            for (String rep : toReplace()) {
-                if (s.startsWith(rep)) {
-                    ability.set(ability.indexOf(s), replaceWith(new NBTItem(base.getOrig()))[i]);
-                    i++;
+        if (ability != null) {
+            for (String s : ability) {
+                for (String rep : toReplace()) {
+                    if (s.startsWith(rep)) {
+                        ability.set(ability.indexOf(s), replaceWith(new NBTItem(base.getOrig()))[i]);
+                        i++;
+                    }
                 }
             }
         }
 
         base.setDescription(lore);
-        base.setAbilityDescription(ability);
+        if (ability != null) base.setAbilityDescription(ability);
 
         base.setStack(null);
 

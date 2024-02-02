@@ -1,20 +1,21 @@
 package com.skyblock.skyblock;
 
+import com.skyblock.skyblock.commands.admin.*;
 import com.skyblock.skyblock.commands.economy.AuctionCommand;
 import com.skyblock.skyblock.commands.economy.BazaarCommand;
 import com.skyblock.skyblock.commands.economy.DepositCommand;
 import com.skyblock.skyblock.commands.economy.WithdrawCommand;
 import com.skyblock.skyblock.commands.enchantment.EnchantCommand;
+import com.skyblock.skyblock.commands.game.HarpCommand;
 import com.skyblock.skyblock.commands.item.*;
 import com.skyblock.skyblock.commands.menu.*;
 import com.skyblock.skyblock.commands.menu.npc.BankerCommand;
 import com.skyblock.skyblock.commands.merchant.SpawnMerchantCommand;
 import com.skyblock.skyblock.commands.misc.*;
-import com.skyblock.skyblock.commands.player.PlayerDataCommand;
-import com.skyblock.skyblock.commands.player.VisitCommand;
-import com.skyblock.skyblock.commands.player.WarpCommand;
+import com.skyblock.skyblock.commands.player.*;
 import com.skyblock.skyblock.commands.potion.CreatePotionCommand;
 import com.skyblock.skyblock.commands.potion.EffectCommand;
+import com.skyblock.skyblock.commands.potion.EffectsCommand;
 import com.skyblock.skyblock.features.auction.AuctionBid;
 import com.skyblock.skyblock.features.auction.AuctionHouse;
 import com.skyblock.skyblock.features.auction.AuctionSettings;
@@ -26,23 +27,28 @@ import com.skyblock.skyblock.features.blocks.RegenerativeBlockHandler;
 import com.skyblock.skyblock.features.blocks.SpongeBlock;
 import com.skyblock.skyblock.features.blocks.SpongeReplacer;
 import com.skyblock.skyblock.features.blocks.SpongeReplacerHandler;
-import com.skyblock.skyblock.features.blocks.crops.FloatingCrystal;
 import com.skyblock.skyblock.features.blocks.crops.FloatingCrystalHandler;
 import com.skyblock.skyblock.features.collections.Collection;
 import com.skyblock.skyblock.features.collections.CollectionListener;
 import com.skyblock.skyblock.features.crafting.RecipeHandler;
 import com.skyblock.skyblock.features.enchantment.SkyblockEnchantmentHandler;
-import com.skyblock.skyblock.features.enchantment.enchantments.*;
 import com.skyblock.skyblock.features.enchantment.enchantments.armor.FireProtectionEnchantment;
 import com.skyblock.skyblock.features.enchantment.enchantments.armor.GrowthEnchantment;
 import com.skyblock.skyblock.features.enchantment.enchantments.armor.ProtectionEnchantment;
-import com.skyblock.skyblock.features.enchantment.enchantments.misc.EfficiencyEnchantment;
+import com.skyblock.skyblock.features.enchantment.enchantments.bow.AimingEnchantment;
 import com.skyblock.skyblock.features.enchantment.enchantments.misc.TelekinesisEnchantment;
 import com.skyblock.skyblock.features.enchantment.enchantments.sword.*;
+import com.skyblock.skyblock.features.enchantment.enchantments.tool.EfficiencyEnchantment;
+import com.skyblock.skyblock.features.entities.EntityListener;
 import com.skyblock.skyblock.features.entities.SkyblockEntityHandler;
+import com.skyblock.skyblock.features.entities.dragon.DragonAltar;
+import com.skyblock.skyblock.features.entities.dragon.DragonSequence;
 import com.skyblock.skyblock.features.entities.spawners.EntitySpawnerHandler;
 import com.skyblock.skyblock.features.fairysouls.FairySoulHandler;
 import com.skyblock.skyblock.features.fairysouls.TiaGUI;
+import com.skyblock.skyblock.features.guis.GuyGui;
+import com.skyblock.skyblock.features.guis.LiftOperatorGui;
+import com.skyblock.skyblock.features.guis.SeymourGui;
 import com.skyblock.skyblock.features.holograms.HologramManager;
 import com.skyblock.skyblock.features.items.Accessory;
 import com.skyblock.skyblock.features.items.SkyblockItem;
@@ -53,18 +59,20 @@ import com.skyblock.skyblock.features.merchants.Merchant;
 import com.skyblock.skyblock.features.merchants.MerchantHandler;
 import com.skyblock.skyblock.features.minions.MinionHandler;
 import com.skyblock.skyblock.features.minions.MinionListener;
+import com.skyblock.skyblock.features.minions.items.MinionItemHandler;
 import com.skyblock.skyblock.features.npc.NPC;
 import com.skyblock.skyblock.features.npc.NPCHandler;
-import com.skyblock.skyblock.features.objectives.QuestLine;
 import com.skyblock.skyblock.features.objectives.QuestLineHandler;
 import com.skyblock.skyblock.features.pets.PetListener;
 import com.skyblock.skyblock.features.potions.PotionEffectHandler;
+import com.skyblock.skyblock.features.potions.effects.HasteEffect;
 import com.skyblock.skyblock.features.potions.effects.HealingEffect;
 import com.skyblock.skyblock.features.potions.effects.SpeedEffect;
 import com.skyblock.skyblock.features.potions.effects.StrengthEffect;
 import com.skyblock.skyblock.features.reforge.ReforgeHandler;
 import com.skyblock.skyblock.features.slayer.SlayerHandler;
 import com.skyblock.skyblock.features.time.SkyblockTimeManager;
+import com.skyblock.skyblock.features.trades.TradeHandler;
 import com.skyblock.skyblock.listeners.*;
 import com.skyblock.skyblock.updater.DependencyUpdater;
 import com.skyblock.skyblock.utilities.Util;
@@ -80,19 +88,19 @@ import org.bukkit.*;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.configuration.serialization.ConfigurationSerialization;
-import org.bukkit.craftbukkit.v1_8_R3.entity.CraftEntity;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Villager;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.io.File;
 import java.util.*;
+import java.util.function.Consumer;
 
 @Getter
 @SuppressWarnings({"unused", "deprecation"})
@@ -112,6 +120,7 @@ public final class Skyblock extends JavaPlugin {
     private SkyblockLocationManager locationManager;
     private PotionEffectHandler potionEffectHandler;
     private SkyblockItemHandler skyblockItemHandler;
+    private MinionItemHandler minionItemHandler;
     private SkyblockEntityHandler entityHandler;
     private LaunchPadHandler launchPadHandler;
     private QuestLineHandler questLineHandler;
@@ -124,8 +133,9 @@ public final class Skyblock extends JavaPlugin {
     private MinionHandler minionHandler;
     private SlayerHandler slayerHandler;
     private RecipeHandler recipeHandler;
-    private List<Entity> removeables;
+    private TradeHandler tradeHandler;
     private AuctionHouse auctionHouse;
+    private List<Entity> removeables;
     private SignManager signManager;
     private ItemHandler itemHandler;
     private BagManager bagManager;
@@ -138,7 +148,6 @@ public final class Skyblock extends JavaPlugin {
 
     private int registeredListeners = 0;
 
-
     @Override
     public void onEnable() {
         this.sendMessage("Found Bukkit server v" + Bukkit.getVersion());
@@ -148,27 +157,12 @@ public final class Skyblock extends JavaPlugin {
 
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "npc remove all");
 
-        File cacheFile = new File(getDataFolder(), ".cache.yml");
-        FileConfiguration cache = YamlConfiguration.loadConfiguration(cacheFile);
-
-        List<String> oldRemoveables = cache.getStringList("removeables");
-
-        List<Entity> entities = Bukkit.getWorld(getSkyblockWorld().getName()).getEntities();
-
-        for (String old : oldRemoveables) {
-            UUID uuid = UUID.fromString(old);
-
-            if (entities.stream().noneMatch(entity -> entity.getUniqueId().equals(uuid))) continue;
-
-            entities.stream().filter(entity -> entity.getUniqueId().equals(uuid)).findFirst().ifPresent(Entity::remove);
-        }
-
-        cache.set("removeables", new ArrayList<>());
-        try {
-            cache.save(cacheFile);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        Bukkit.createWorld(new WorldCreator("deep_caverns").type(WorldType.FLAT).generator(new ChunkGenerator() {
+            @Override
+            public byte[] generate(World world, Random random, int x, int z) {
+                return new byte[32768];
+            }
+        }));
 
         this.removeables = new ArrayList<>();
 
@@ -192,6 +186,7 @@ public final class Skyblock extends JavaPlugin {
         this.initializeFloatingCrystals();
 
         this.registerMerchants();
+        this.registerTrades();
         this.registerCollections();
         this.registerNpcs();
         this.registerGuis();
@@ -222,8 +217,6 @@ public final class Skyblock extends JavaPlugin {
     public void onDisable() {
         this.sendMessage("Disabling Skyblock...");
         long start = System.currentTimeMillis();
-
-        this.fairySoulHandler.killAllSouls();
 
         int i = 0;
 
@@ -270,7 +263,21 @@ public final class Skyblock extends JavaPlugin {
             skyblockPlayer.onQuit();
         }
 
+//        try {
+//            DragonAltar.getMainAltar().onDisable();
+//            DragonSequence.endingSequence();
+//        } catch (Exception ignored) { }
+
         sendMessage("Successfully disabled Skyblock [" + Util.getTimeDifferenceAndColor(start, System.currentTimeMillis()) + ChatColor.WHITE + "]");
+    }
+
+    public void registerTrades() {
+        this.sendMessage("Registering trades...");
+        long start = System.currentTimeMillis();
+
+        this.tradeHandler = new TradeHandler(this);
+
+        this.sendMessage("Successfully registered &a" + this.tradeHandler.getTrades().size() + " &ftrades [" + Util.getTimeDifferenceAndColor(start, System.currentTimeMillis()) + ChatColor.WHITE + "]");
     }
 
     public void initializePotions() {
@@ -280,14 +287,20 @@ public final class Skyblock extends JavaPlugin {
         this.potionEffectHandler = new PotionEffectHandler(
                 SpeedEffect.class,
                 HealingEffect.class,
-                StrengthEffect.class
+                StrengthEffect.class,
+                HasteEffect.class
         );
 
         this.sendMessage("Successfully initialized potions [" + Util.getTimeDifferenceAndColor(start, System.currentTimeMillis()) + ChatColor.WHITE + "]");
     }
 
     public void initializeFloatingCrystals() {
+        this.sendMessage("Initializing floating crystals...");
+        long start = System.currentTimeMillis();
+
         this.floatingCrystalHandler = new FloatingCrystalHandler();
+
+        this.sendMessage("Successfully initialized floating crystals [" + Util.getTimeDifferenceAndColor(start, System.currentTimeMillis()) + ChatColor.WHITE + "]");
     }
 
     public void registerHolograms() {
@@ -302,7 +315,12 @@ public final class Skyblock extends JavaPlugin {
     }
 
     private void initializeQuests() {
+        this.sendMessage("Initializing quests...");
+        long start = System.currentTimeMillis();
+
         this.questLineHandler = new QuestLineHandler();
+
+        this.sendMessage("Successfully registered " + ChatColor.GREEN + this.questLineHandler.getQuests().size() + ChatColor.WHITE + " quests [" + Util.getTimeDifferenceAndColor(start, System.currentTimeMillis()) + ChatColor.WHITE + "]");
     }
 
     public void initializeBazaar() {
@@ -341,7 +359,12 @@ public final class Skyblock extends JavaPlugin {
     }
 
     public void initializeFairySouls() {
+        this.sendMessage("Registering fairy souls...");
+        long start = System.currentTimeMillis();
+
         this.fairySoulHandler = new FairySoulHandler();
+
+        this.sendMessage("Successfully registered " + ChatColor.GREEN + this.fairySoulHandler.getSouls().size() + ChatColor.WHITE + " fairy souls ["  + Util.getTimeDifferenceAndColor(start, System.currentTimeMillis()) + ChatColor.WHITE + "]");
     }
 
     public void registerBlockHandler() {
@@ -354,7 +377,12 @@ public final class Skyblock extends JavaPlugin {
     }
 
     public void registerSlayers() {
+        this.sendMessage("Registering slayers...");
+        long start = System.currentTimeMillis();
+
         this.slayerHandler = new SlayerHandler();
+
+        this.sendMessage("Successfully registered slayers [" + Util.getTimeDifferenceAndColor(start, System.currentTimeMillis()) + ChatColor.WHITE + "]");
     }
 
     public void registerBags() {
@@ -382,7 +410,7 @@ public final class Skyblock extends JavaPlugin {
 
                             return base.getRarity().toUpperCase().contains("ACCESSORY");
                         }),
-                        (player, inventory) -> player.getBukkitPlayer().sendMessage(ChatColor.GREEN + "You have opened your Accessory Bag!"),
+                        (player, inventory) -> player.getBukkitPlayer().playSound(player.getBukkitPlayer().getLocation(), Sound.HORSE_ARMOR, 10, 0),
                         (player, itemStack) -> {
                             Accessory.onEquip(itemStack, player);
 
@@ -405,6 +433,20 @@ public final class Skyblock extends JavaPlugin {
                                 accessory.onUnEquip(player);
                             }
                         }
+                )
+        );
+
+        this.bagManager.registerBag(
+                new Bag(
+                        "quiver",
+                        "Quiver",
+                        "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNGNiM2FjZGMxMWNhNzQ3YmY3MTBlNTlmNGM4ZTliM2Q5NDlmZGQzNjRjNjg2OTgzMWNhODc4ZjA3NjNkMTc4NyJ9fX0=",
+                        "&7A masterfully crafted Quiver\n&7which holds any kind of\n&7projectile you can think of!",
+                        44,
+                        (stack -> stack.getType().equals(Material.ARROW) || stack.getType().equals(Material.PRISMARINE_SHARD) || stack.getType().equals(Material.MAGMA_CREAM) || stack.getType().equals(Material.SLIME_BALL)),
+                        (player, inventory) -> player.getBukkitPlayer().playSound(player.getBukkitPlayer().getLocation(), Sound.HORSE_ARMOR, 10, 0),
+                        (player, itemStack) -> {},
+                        (player, itemStack) -> {}
                 )
         );
 
@@ -453,7 +495,10 @@ public final class Skyblock extends JavaPlugin {
                         false,
                         null,
                         new Location(getSkyblockWorld(), 20.5, 71, -40.5),
-                        (player) -> this.getGuiHandler().show("banker", player),
+                        (player) -> {
+                            SkyblockPlayer.getPlayer(player).setExtraData("personalBankLastUsed", 0L);
+                            this.getGuiHandler().show("banker", player);
+                        },
                         "ewogICJ0aW1lc3RhbXAiIDogMTY1NTg0NTIwODg3OSwKICAicHJvZmlsZUlkIiA6ICI2NmI0ZDRlMTFlNmE0YjhjYTFkN2Q5YzliZTBhNjQ5OSIsCiAgInByb2ZpbGVOYW1lIiA6ICJBcmFzdG9vWXNmIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzYyYTExMGIwMmVmYzU4ZjJiYTc3YWVlZjE3ZGY3ZTMyOWQ4OTZjNDU5MDI0NDIzMzg0OWY0MmRhMDIzMjhhOSIKICAgIH0KICB9Cn0=",
                         "EBEcNTFPKGK8a1kGPyV0rHzZlwjp3s6jH3NBpVnrt0dgiieIChfiknBr8AAeC6Petrw1YAeHPwq5hC358BLggCNQQOgcJ0vcrZpISSPMfxi03WliH7lY6l5kboc6ht1vEdAZgCt/Sn9mKXqw4DzuHK2+2kl1hPkBX3rE5swVcqm9e/xLGsftE6NWWVpxw90YobRYF3NMzHX4PlFXHpndbDdMaPMTIAwSjDyR+scuOJKgV8tVYRp27aGBKevJXafYxxg9v8P06rFYif6DlyhDgU5/qnwFZdxnYUPrT7CeyLKptxPUzjy+G9iOiH7rkSJwkj22zk4BEdrcmAL0jNFr4dXq9n9d9MFtZ6KEqjBwPfB1T5ixMYS6tdmnbZYSamFAKUuKv1Jxs6WqwS3FesA7lALNNuZfXdsWaSBlT7d+TCsqjhlUccOEW5KyeLdgBsmACiPfQ+EGH6NET+plxDAdoVU21YPJJosqHvWR5+RZUlaXZIEXnPfeN/2BzYjoQVktn1T44Qdv0MfYerfDG0GsyrVAMcoi6I2zzB97OeQi/eUtOxv4KIvTHLtmULJtvrr6jqeodg+RoL9twIPLfG/+CBm9lznYnp5kIJxIGCUJ8fk7mzSnO5vW/Ej0vxADYYwpJStrkapaspWe1LNRGEqYBw2kTnk10wFQiVeYdhTJH1I="
                 )
@@ -522,6 +567,113 @@ public final class Skyblock extends JavaPlugin {
                         "ewogICJ0aW1lc3RhbXAiIDogMTU5NjQ5MTIwODg4NCwKICAicHJvZmlsZUlkIiA6ICJkNjBmMzQ3MzZhMTI0N2EyOWI4MmNjNzE1YjAwNDhkYiIsCiAgInByb2ZpbGVOYW1lIiA6ICJCSl9EYW5pZWwiLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTMzNmQ3Y2M5NWNiZjY2ODlmNWU4Yzk1NDI5NGVjOGQxZWZjNDk0YTQwMzEzMjViYjQyN2JjODFkNTZhNDg0ZCIKICAgIH0KICB9Cn0=",
                         "NeIGEVhTQsg+GfcmtVhCCXdWX6tQpI/iUjPixUKaxea5q8xTpCKFSGqnIhSgG0CjPpxw9UKwC1yr4gIDsM5zPGjnIsD3PDP4F6Jaicx0YsiJGr861zxQDSlxpkcbGXrHRuNq92TT4/zojNMk6qPGtGeFApro7dXxU5Fq7HpyikHR2S4iaTZAF2L65rXqdogmQIBcTI5UVO2cZ3xNSr3j9y/nKGUx0SwVaIryt1sMHj2cO5Lknb9eiiG+vfw/LTlgwOmc9PXHhQB045SoBgGondcBZYBWVGCP9dTCNrvDBp963rzEkJMOfLfL+M2P+BT318BCBQzQ6JGJuILqhdY/Ph7qZJW2P9g8At9chbfnBdwMnHvjTshGN3XMzVg8BdxFAKydJMSocfF4j9KvPCtP1Hilk0pylqRAPe1cn0JpTZ1e/xzorzgqHdo0kXmf8gzLXHXDz8fYanZpQQCemwL3aOHy6nvAFFk/+j6kGLEaetTZgw8WAMJiyAxcpN/elfG9fxoX+pXMFtM9ItRA2Sf6EHdRKJTc4gB+yclkuCd3MgCiRDZU5NwpH8AhTmFZsjd0nHzHLXvpNPmSLAZiYi7EqG9SySEu7pJ4PXHZ0F80jKknNqh0CnnnqH4iKdMIUau33ENPKTLiuxwqxj9bv6ZtsCUZXn/mHWeCOiB6IBPjaR0="));
 
+        this.npcHandler.registerNPC("guy",
+                new NPC("Guy",
+                        true,
+                        true,
+                        false,
+                        null,
+                        new Location(getSkyblockWorld(), 51.5, 79, -13.5),
+                        (p) -> {
+                            SkyblockPlayer player = SkyblockPlayer.getPlayer(p);
+
+                            if (player.getIntValue("bank.personal.cooldown") == -1) {
+                                Util.sendDelayedMessages(p, "Guy", (pl) -> new GuyGui(p).show(p),
+                                        "Heard of the " + ChatColor.GREEN + "Personal Bank" + ChatColor.WHITE + "?",
+                                        "It will let you access your bank remotely.",
+                                        "Unlock it through " + ChatColor.GREEN + "Emerald" + ChatColor.WHITE + " collection.");
+                            } else {
+                                new GuyGui(p).show(p);
+                            }
+                        },
+                        "ewogICJ0aW1lc3RhbXAiIDogMTU5OTQ1NzU3MjI1NCwKICAicHJvZmlsZUlkIiA6ICI2MTI4MTA4MjU5M2Q0OGQ2OWIzMmI3YjlkMzIxMGUxMiIsCiAgInByb2ZpbGVOYW1lIiA6ICJuaWNyb25pYzcyMTk2IiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlL2U5ZTIzYmU3ZjA0NTU2ZmEzMzM1MWE0Yzc3MWEzZjA1ZjRhNmQyN2RlNDEzYTM2ZDAyMzBjNjFmNzE2OTg3OTkiLAogICAgICAibWV0YWRhdGEiIDogewogICAgICAgICJtb2RlbCIgOiAic2xpbSIKICAgICAgfQogICAgfQogIH0KfQ==",
+                        "lu9SuKpv/U8XqaZTkleKzPDg8S1pcqA7LSWiWimR9x0BnkpK5CkyLwkWA1AMKCibQZSMPjoFFySNMVRcIhylv3yN0V6/Y6moJi1/SmRIeJJL/FovCUykzTSvbWsqJXfRyoi+5mUt6REj6bvJQruNtCedIHQD5a0Mrw3d8LbvZ0OlGPUbaAv1O7dW1O2uxmxCDSWMOL8PN+6fb/zYgA/XeJvSj97LafK4YAeb1YV362CeMkhmMP0uE5wj11+BnexEN+WaBzbRIUlBuSMB+Pw+7RoS4Nk7kxxKSNAR/pzlSqFHLkTlL88ljrLeyEooccpETSuqLh55/wsWSdesEDpSNjmfRYVX9EXOk783VRz3Btb+MItjiqmos5Mgmjelnx34utIPkAFbLyn/AUvWaNImxhWw/iDFYod+C/QNbUqR/H9ahIHzZXun4+6tKhVBgaCfLqaqF+V9Js8miapUpW16EEnElTNJ843+/HFgqex18q2vCTUX0tixtzHrFmwhhbBnT02DSvbvIxm9ucyNMwTpYhJ33I433pB67i1iQxiNBxaTTVSn2bGs4AKLgOjkTg3TsixEix02fCOzFl8bau/JlZMDmk7/2SAI74VRnreBVTEHjIAb7SRRXNy+zOxQJLzyMB+TwpGBBIUbNpCgjKu0aqu+Ld/FOO37dvBke8bv7Uw="));
+
+        this.npcHandler.registerNPC("taylor",
+                new NPC("Taylor",
+                        true,
+                        true,
+                        false,
+                        null,
+                        new Location(Skyblock.getSkyblockWorld(), -28, 71, -107),
+                        (p) -> Util.sendDelayedMessages(p, "Taylor", "Hello!", "You look dashing today!"),
+                        "ewogICJ0aW1lc3RhbXAiIDogMTU5MDg4MzYxNjg5NCwKICAicHJvZmlsZUlkIiA6ICI3ZGEyYWIzYTkzY2E0OGVlODMwNDhhZmMzYjgwZTY4ZSIsCiAgInByb2ZpbGVOYW1lIiA6ICJHb2xkYXBmZWwiLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMThjYTBjODliZWY4YzRlN2U1MjFiMTEzODIxZmZkZjAwZTdiNWViNTUyYTM3OGY5MDM3Y2JlYzY1NWRkMjdjOCIKICAgIH0KICB9Cn0=",
+                        "r6GGjK7Rb0X3mhJQFyMYn+5OU0JvzBYnxti3hGQfomrDMrI5NdWe/+huGw22UqSFt7pMoZH+04J0z0gFFFFmdY6p0gbcls/9W1qIxgjSFYbDM5y/v1xu3+o9sX5P4WY9WVLOV/RYilfTNIRHCu6+rb/X+x+4ftttaf+zyVvF/bMQq+EwgcRo0UNkXIOrzvH0CKNbEIF9D/9mHk2kBgElq6ucs5ohVSVkU9R4XWTbzs2v4LYmSumRSzKd4eB6L66R3CbCqt7nk8DLnsEmexcxR8u9k6BR1P2Itf2yGZPf1hdconNZKqKdv/sKgtPZo5wcIk5h5cGfezN1b2wHXbKBXV/EN2ZTvC5seNJlXDHy0vGhlThwqHPvd24E+aSHnLu+Gfujw72NR10VsL5cnxmLjmGQQh12ohus5ZO45nE8+UZEBq4gr1wdgMfTRF8XYYRXclKuFcPwKMFMjsGtvV4jVxEunuZitygHOzcjUF7dKYbBv8yFtP0UxWA9r2Phcf1JwqHWf0lSE9l2Qi+AKoz3HCBhKdxPvuIPET/VKCB4xQkrjm8pCQYyD9FOLz0/t6yLf4KOHEhSfcWM2ObzACAxH3Euz8KCFdYUQShVejAvahA2sJM/twqZdvDgVed4Apmhx/LAJjhGRTzIvg0D7HzZVyfArEEgQMi8ZDttE/5Lyk4="
+                ));
+
+        this.npcHandler.registerNPC("melody",
+                new NPC("Melody",
+                        true,
+                        true,
+                        false,
+                        null,
+                        new Location(Skyblock.getSkyblockWorld(), -398, 110, 35),
+                        (p) -> {
+                            Util.sendDelayedMessages(p, "Melody", "Hello!", "Want to learn the harp?", "I'll teach you! ❤", "Pick a song to get started!");
+                            p.performCommand("sb harp");
+                        },
+                        "eyJ0aW1lc3RhbXAiOjE1ODcwMTU4MTQ5NTIsInByb2ZpbGVJZCI6ImIwZDRiMjhiYzFkNzQ4ODlhZjBlODY2MWNlZTk2YWFiIiwicHJvZmlsZU5hbWUiOiJNaW5lU2tpbl9vcmciLCJzaWduYXR1cmVSZXF1aXJlZCI6dHJ1ZSwidGV4dHVyZXMiOnsiU0tJTiI6eyJ1cmwiOiJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzRkMjM4Y2NjODE4YWIwYzBmZGViZDA3ZDRhNTZjMzUzZmY1ZWI1NDFjODVkMzg2MzYyMTYxNzgxZDFkZDc0Y2MifX19",
+                        "wUgPl5j42AXlnQnT2z1TCVg7rBcxi3dxcB5tJt6Hb+N9V3MlgUH1mtcSE88wClQxb1i9qlqqIk+R2UPaNf74xwxRqLELufuZ/JOCstsKrjQPY3t8nm3Xx6b101h8sm+5MpemFajF5j4ZC73mMk99HsEdGwWNGkV+oFl5+0lmyxO5mFcxPO15jrj2ZsjUH4rQQJRdaMNC6B1EBBsPQaVVG0nQV5/Mk2r4R1iTTXOSSn9ygtgkjlCMlLyrrE+1SdoD5015iDouXsqxpTXkngrtZLTEyTmo4GvqR5M+iMgEAj8aD4np0AEU4WgZ7dAMwCiYFFSXXigQxjwVxzQUX/6ZrYTdTNYnHSoCf6p2hc2vkabMS8aopJ4w5/e7Z4KM1rv3yn+umn5Hb42a8rcbOL7QWxuE5naFS9TZHn0WPl9CtLi2Yqv1YKy6hiVhv47r2++jOLYRoWCcA47aBi6vP/XRl20SUUSoK3+mnblnqF3wCUR0Z7xi2NLXDVzXz49CitDKhCN3Ve6nbkVgab1SXBkyl0qkY50k8v0nXtOd9wWmFSOSHiGxFB/pctwf+vx16BiydPRIluOhlFklBw6lMgzsG4NFhPfne4eV4YYt0HmkC86MsPpvzRgbnGWwBgPl7G9f3owOU4ilvMd9ea4+41EcCsB3sE23qfzR+7+17G7jRlI="
+                ));
+
+        this.npcHandler.registerNPC("seymour",
+                new NPC("Seymour",
+                        true,
+                        true,
+                        false,
+                        null,
+                        new Location(Skyblock.getSkyblockWorld(), -30.5, 66, -108.5),
+                        (p) -> {
+                            Util.sendDelayedMessage(p, "Seymour", "Looking to buy something fancy?", 0);
+                            new SeymourGui(p).show(p);
+                        },
+                        "ewogICJ0aW1lc3RhbXAiIDogMTU5OTQ2MDQ5OTc1NCwKICAicHJvZmlsZUlkIiA6ICI3NTE0NDQ4MTkxZTY0NTQ2OGM5NzM5YTZlMzk1N2JlYiIsCiAgInByb2ZpbGVOYW1lIiA6ICJUaGFua3NNb2phbmciLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYzhhYWM0ZTYzMTM5OGMwZjQ3ZmU4NTYxNWU3ZjQ5MjE1NTAwMDQwYmI5MDgxOWQ1NjhlODI0YWNmOTRiZmE0ZSIKICAgIH0KICB9Cn0=",
+                        "hGGbYl4OuItrGiGXYYh6mCy1a5xknDipoYay1DFARt03+YJ6ebFagIMH7JgEY3CFed8WIxFcNivfpZ3q47e2KhNugR+6/X4KBrHtyz9fWVte2HGW7p2ShiYipcUL+8wBjvJ2ssEsWTUeGgqnBgo/sA3UdsWhB6E9iP34x4nm5lPfnKT2Jl9QyhsqXSOQYmidDUY5z0kGhmy0IXRoh92vF/lrzmdpS4TamfogRLGV1BivxZ8C71ImVczEm/JHWTGCdjwFBTdoZzkUOJ9IE+tbBUlOWWFMvjW+TY4Y3pBM5lzY3TMTpvG+rHZ0042E2SNfp2RmHaEAqMNb9JI57qfXKZ8zJB1/8gU+pFjuuXRsWuV0tWKLIUGSH3nIho/BidPBoe6YUsWCe9ySSrFprocKU96Ct6z5l8bsoJ5xtiOGSn/5JdUexc4IUF9ICFh7Xeu8rvGufH7s1BIyLgUBQQSvVpj31VharFkV0IVnwG/4c/YBYaaUUH07CW0woj577fd5nCVEs8pfJ7KNrChtna0LzDZQuELzDwmQO5mdOxWEwGurPvPx1uFm3tCDVBRUrj+CCVCQqIflg9s3nVTRSPZhl3ZlNW+L8/wVdjuXtGTXGWT9ou+nfGRT8c0ENrsVE3dkWe4o2BaokIIdCJ1isO+GS6oMNP6I07EGgxUZFe2kk8A="
+                ));
+
+        /*
+        Admin houses
+         */
+
+        this.npcHandler.registerNPC("sylent_",
+                new NPC(
+                        ChatColor.RED + "Sylent_",
+                        true,
+                        true,
+                        false,
+                        null,
+                        new Location(Skyblock.getSkyblockWorld(), -67.5, 69, -93.5),
+                        (p) -> Util.sendDelayedMessages(p, ChatColor.RED + "Sylent_", "You can hold as many talismans as you want in your inventory. They will always work."),
+                        "ewogICJ0aW1lc3RhbXAiIDogMTY3MzAzNTIyNDg4MSwKICAicHJvZmlsZUlkIiA6ICI1MWU4OTE1ZGJlM2E0ZDU4OTQ2OTNhMTZmM2M2MGM3MyIsCiAgInByb2ZpbGVOYW1lIiA6ICJTeWxlbnRfIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzIzNGU2ZmVjZTVhNTY0MzNiYWFlYmE3ODc4NjYyYjIzNjJiNGZmYjdkNTIzOWVhZDgzZmZjOTUyMjFmOGViYzUiCiAgICB9LAogICAgIkNBUEUiIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzIzNDBjMGUwM2RkMjRhMTFiMTVhOGIzM2MyYTdlOWUzMmFiYjIwNTFiMjQ4MWQwYmE3ZGVmZDYzNWNhN2E5MzMiCiAgICB9CiAgfQp9",
+                        "NniVgyJmfWI5OK/7t9q4hWalHgVMO/VR5HqTod6DY+00qkCZgPkEGBxWbAdxvfE4yrVK/TaPRsMS7cJcSP3k74WYEPIPnXthNfNbzsGPz17Ns3fsc/w4GaLp688zo0OG8TRKRJA2ECcoD1B0kaAuRLKsO7NyBBj8XLL+pHv5QwNeMXg53x2OxsoTf25/BdcJJ9bNVv84V+bCAs1gspnbYBWaODcKj3qUUkUPXrm7nHeafi7snXCIRN1L088Qv3Lu7HTor3sojn9rH1FaFCLGIuVimvW+HWGRdkq3soXJrvFPyIZzstKQtXGUjOSG6V1cNPYXCVO/A6VtW1VmU2Lio9/Q7xvjLF9U3fcD4rXHZz6YUy5iZz6YbznjMAdRzYiFgg7lpRd8Au4Gcykf6873IX0YXucwcB4GiPUkRVnoCLI8j2UbdbHy8MO0ydvP1u1QamhWbRjorSJfUBbk6o2NYeYIfuZ+Gcki3xgWtrc1R0Q6FXN+K5Cir2GvXlQXjKrz2W0tAb8kkl3/4ITRZwoJN22i0CqoVq/FawFJNsW7lG/W7t29uxsaySj34gyDYsQag19DWAwUaazq207JNGVMcJCji/55qT4OxItFrjg2EvfpdJ+DbWLY2BlOABXhGKEjuYCFsABZcO9tI7gwW/+rkLIlGOqHfprtKGC/sHG63PE="
+                ));
+
+        final int[] liftOperators = {0};
+
+        Consumer<Integer> spawnLiftOperator = (y) -> {
+            this.npcHandler.registerNPC(
+                    "lift_operator_" + liftOperators[0],
+                    new NPC(ChatColor.AQUA + "Lift Operator",
+                            true,
+                            true,
+                            false,
+                            null,
+                            new Location(Bukkit.getWorld("deep_caverns"), 45.5, y, (y == 101 ? 17.5 : 15.5)),
+                            (player) -> new LiftOperatorGui(player).show(player),
+                            "ewogICJ0aW1lc3RhbXAiIDogMTU5Mzk5ODcxNjIyOSwKICAicHJvZmlsZUlkIiA6ICI2OTBkMDM2OGM2NTE0OGM5ODZjMzEwN2FjMmRjNjFlYyIsCiAgInByb2ZpbGVOYW1lIiA6ICJ5emZyXzciLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZWRhODdjODAwNWJlM2QzMWZkNDMyM2NiMWE0NGI5ZjY5ZmQxOTgyYWY1YjljODdhMzU5NTUzNjY2ZWFjODUyYSIKICAgIH0KICB9Cn0=",
+                            "wbcgvF/NVdgPE80LE/KTpGVnHkvZ8L8lmdoflEjK3yfiOL4gXzdoP5hYoCG1nBh6wppNi4a7rNZf0RV0fnUgy18NQdrqVGh6crIpQ+ya6zSeegfD7jVyAGPRCcJmtu14jUIhZeWd22AOOq9H1QR/bF9xtRO4zkDrAA11qW9c49f6n6wYQpOcFDjSdBcg4hUFyEh7XlmbdhwphM6waJnA6FlPXm5gLfLr7n5Ug5xznoqviF/d7OlEDbgg37csjtDnkY99QnRdxjCET1Bvl2g1ZTQmOVplDmhuTrV8hndvJT4Gn1kcx531u17fyLsg6B7SLn8ojxLzTVJM4d47JqXkWfBz1bXby6owPgKM95dGf+IAAUopYJ3KLL76huakeSYN1koG6t17veFwVkFhJUqtSZKsSLyAGSyINUa0zMjz9VLkYQkqWw2RhXQLKLQs7qKzXcGdrtT52QZcuA9zRFskkPYukPEswektVlxwJuuMicRHk5BZlIicOgMjaHqR6HwAChzJPDQkPKIbXjrWEVtQCIPNbGkbIlz2+/owNc8vvuzwHrtjlh1gBw5cfM9bz83Kmr6KLAnDknQ0SeRAe5mF6+Vf4y07YI8yARCeTAcPd5SPmpX0nW7VRcCzOH3deGNgS3pzcusKsISfF+qAo50qRMEOCcosz6juMiborf8fu60=")
+            );
+
+            liftOperators[0]++;
+        };
+
+        spawnLiftOperator.accept(150);
+        spawnLiftOperator.accept(121);
+        spawnLiftOperator.accept(101);
+        spawnLiftOperator.accept(66);
+        spawnLiftOperator.accept(38);
+        spawnLiftOperator.accept(13);
+
         this.sendMessage("Successfully registered NPCs [" + Util.getTimeDifferenceAndColor(start, System.currentTimeMillis()) + ChatColor.WHITE + "]");
     }
 
@@ -539,9 +691,14 @@ public final class Skyblock extends JavaPlugin {
     }
 
     public void initializeRecipes() {
+        this.sendMessage("Initializing recipes...");
+        long start = System.currentTimeMillis();
+
         this.recipeHandler = new RecipeHandler();
 
         this.recipeHandler.init();
+
+        this.sendMessage("Successfully initialized " + ChatColor.GREEN + this.recipeHandler.getRecipes().size() + ChatColor.WHITE + " recipes [" + Util.getTimeDifferenceAndColor(start, System.currentTimeMillis()) + ChatColor.WHITE + "]");
     }
 
     public void registerLocations() {
@@ -610,12 +767,17 @@ public final class Skyblock extends JavaPlugin {
     }
 
     public void initializeSpongeReplacers() {
+        this.sendMessage("Initializing sponge replacers...");
+        long start = System.currentTimeMillis();
+
         this.spongeReplacerHandler = new SpongeReplacerHandler();
 
         this.spongeReplacerHandler.registerReplacer(new SpongeReplacer("Gold Mine", new SpongeBlock(Material.STONE, 10), new SpongeBlock(Material.IRON_ORE, 3), new SpongeBlock(Material.GOLD_ORE, 2)));
         this.spongeReplacerHandler.registerReplacer(new SpongeReplacer("The End", new SpongeBlock(Material.OBSIDIAN, 1)));
 
         this.spongeReplacerHandler.startGeneration();
+
+        this.sendMessage("Successfully initialized sponge replacers [" + Util.getTimeDifferenceAndColor(start, System.currentTimeMillis()) + ChatColor.WHITE + "]");
     }
 
     public void registerGuis() {
@@ -656,11 +818,13 @@ public final class Skyblock extends JavaPlugin {
         this.enchantmentHandler.registerEnchantment(new TelekinesisEnchantment());
         this.enchantmentHandler.registerEnchantment(new CriticalEnchantment());
         this.enchantmentHandler.registerEnchantment(new BaneOfArthropodsEnchantment());
+        this.enchantmentHandler.registerEnchantment(new LifeStealEnchantment());
         this.enchantmentHandler.registerEnchantment(new CubismEnchantment());
         this.enchantmentHandler.registerEnchantment(new DragonHunterEnchantment());
         this.enchantmentHandler.registerEnchantment(new FireProtectionEnchantment());
         this.enchantmentHandler.registerEnchantment(new SmiteEnchantment());
         this.enchantmentHandler.registerEnchantment(new EfficiencyEnchantment());
+        this.enchantmentHandler.registerEnchantment(new AimingEnchantment());
 
         this.sendMessage("Successfully registered &a" + this.enchantmentHandler.getEnchantments().size() + " &fenchantments [" + Util.getTimeDifferenceAndColor(start, System.currentTimeMillis()) + ChatColor.WHITE + "]");
     }
@@ -676,7 +840,9 @@ public final class Skyblock extends JavaPlugin {
     }
 
     public void registerCollections() {
+        this.sendMessage("Registering collections...");
         long start = System.currentTimeMillis();
+
         if (!Collection.INITIALIZED) {
             try {
                 Collection.initializeCollections(this);
@@ -685,6 +851,8 @@ public final class Skyblock extends JavaPlugin {
                 this.getServer().getPluginManager().disablePlugin(this);
             }
         }
+
+        this.sendMessage("Successfully registered " + ChatColor.GREEN + Collection.getCollections().size() + ChatColor.WHITE + " collections [" + Util.getTimeDifferenceAndColor(start, System.currentTimeMillis()) + ChatColor.WHITE + "]");
     }
 
     public void registerListeners() {
@@ -706,6 +874,9 @@ public final class Skyblock extends JavaPlugin {
         registerListener(new PetListener());
         registerListener(new MinionListener());
         registerListener(new PotionListener());
+        registerListener(new EntityListener());
+        registerListener(new Util.UL());
+        registerListener(new DragonSequence());
 
         this.sendMessage("Successfully registered " + ChatColor.GREEN + registeredListeners + ChatColor.WHITE + " listeners [" + Util.getTimeDifferenceAndColor(start, System.currentTimeMillis()) + ChatColor.WHITE + "]");
     }
@@ -729,7 +900,7 @@ public final class Skyblock extends JavaPlugin {
                 new ItemBrowserCommand(),
                 new GuiCommand(),
                 new CollectionCommand(),
-                new MenuCommand(),
+                new SkyblockMenuCommand(),
                 new PlayerDataCommand(),
                 new EnchantCommand(),
                 new SummonCommand(),
@@ -753,7 +924,23 @@ public final class Skyblock extends JavaPlugin {
                 new BazaarCommand(),
                 new RegenerateCommand(),
                 new EffectCommand(),
-                new CreatePotionCommand()
+                new CreatePotionCommand(),
+                new SettingsCommand(),
+                new HubCommand(),
+                new IslandCommand(),
+                new EffectsCommand(),
+                new MaxMyItemCommand(),
+                new CoinsCommand(),
+                new GameModeCommand(),
+                new SkillXpCommand(),
+                new FairySoulCommand(),
+                new HarpCommand(),
+                new LoopCommand(),
+                new WipeCommand(),
+                new HealCommand(),
+                new SlayerbossCommand(),
+                new SlayerbossCommand(),
+                new LaunchCommand()
         );
 
         Objects.requireNonNull(getCommand("skyblock")).setExecutor(this.commandHandler);
@@ -765,7 +952,7 @@ public final class Skyblock extends JavaPlugin {
         this.sendMessage("Initializing game rules...");
         long start = System.currentTimeMillis();
         List<World> worlds = Bukkit.getWorlds();
-        
+
         for (World world : worlds) {
             world.setGameRuleValue("doDaylightCycle", "false");
             world.setGameRuleValue("doWeatherCycle", "false");
@@ -789,6 +976,7 @@ public final class Skyblock extends JavaPlugin {
         this.itemHandler.init();
 
         this.skyblockItemHandler = new SkyblockItemHandler(this);
+        this.minionItemHandler = new MinionItemHandler(this);
 
         this.sendMessage("Successfully initialized items [" + Util.getTimeDifferenceAndColor(start, System.currentTimeMillis()) + ChatColor.WHITE + "]");
     }
@@ -809,7 +997,9 @@ public final class Skyblock extends JavaPlugin {
         return ChatColor.translateAlternateColorCodes('&', "&7[&3S&bB&7] &f");
     }
 
-    public static Skyblock getPlugin() { return Skyblock.getPlugin(Skyblock.class); }
+    public static Skyblock getPlugin() {
+        return Skyblock.getPlugin(Skyblock.class);
+    }
 
     public void addRemoveable(Entity entity) {
         this.removeables.add(entity);

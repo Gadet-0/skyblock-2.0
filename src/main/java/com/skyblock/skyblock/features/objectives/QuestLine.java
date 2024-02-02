@@ -1,5 +1,6 @@
 package com.skyblock.skyblock.features.objectives;
 
+import com.skyblock.skyblock.Skyblock;
 import com.skyblock.skyblock.SkyblockPlayer;
 import lombok.Getter;
 import org.bukkit.ChatColor;
@@ -33,7 +34,7 @@ public class QuestLine {
             return obj;
         }
 
-        return null;
+        return new Objective("", "");
     }
 
     public Objective getNext(Objective obj) {

@@ -2,14 +2,12 @@ package com.skyblock.skyblock.features.enchantment.enchantments.sword;
 
 import com.skyblock.skyblock.SkyblockPlayer;
 import com.skyblock.skyblock.features.enchantment.types.SwordEnchantment;
+import com.skyblock.skyblock.utilities.Util;
 import com.skyblock.skyblock.utilities.item.ItemBase;
-import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.EntityDamageEvent;
 
 public class CleaveEnchantment extends SwordEnchantment {
 
@@ -21,8 +19,7 @@ public class CleaveEnchantment extends SwordEnchantment {
 
     @Override
     public void onDamage(SkyblockPlayer player, EntityDamageByEntityEvent e, double damage) {
-        if (player.getExtraData("cleave_enchantment") != null) return;
-        if (player.getExtraData("venomous_enchantment") != null) return;
+        if (Util.isNotSkyblockEntity(e)) return;
 
         try {
             ItemBase base = new ItemBase(player.getBukkitPlayer().getItemInHand());
@@ -32,10 +29,7 @@ public class CleaveEnchantment extends SwordEnchantment {
             for (Entity en : entity.getNearbyEntities((3.3 + (level - 1) * 0.3), 2, (3.3 + (level - 1) * 0.3))) {
                 if (en instanceof Player) continue;
 
-                player.setExtraData("cleave_enchantment", (level * 3) / 100F);
-                Bukkit.getPluginManager().callEvent(new EntityDamageByEntityEvent(player.getBukkitPlayer(), en, EntityDamageEvent.DamageCause.ENTITY_ATTACK, damage));
-                ((LivingEntity) en).damage(0);
-                player.setExtraData("cleave_enchantment", null);
+                Util.getSBEntity(en).damage((long) ((level * 3L) / 100F), player, false);
             }
         }  catch (IllegalArgumentException | NullPointerException ignored) { }
     }

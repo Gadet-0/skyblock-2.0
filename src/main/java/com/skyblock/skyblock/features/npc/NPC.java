@@ -1,7 +1,7 @@
 package com.skyblock.skyblock.features.npc;
 
-import com.skyblock.skyblock.Skyblock;
-import com.skyblock.skyblock.event.SkyblockNPCClickEvent;
+import com.skyblock.skyblock.SkyblockPlayer;
+import com.skyblock.skyblock.events.SkyblockPlayerNPCClickEvent;
 import com.skyblock.skyblock.utilities.Util;
 import lombok.Data;
 import net.citizensnpcs.api.event.NPCRightClickEvent;
@@ -43,11 +43,6 @@ public class NPC implements Listener {
         List<Object> npcData = Util.spawnSkyblockNpc(this.location, this.name, this.skinValue, this.skinSignature, this.hasSkin, this.doesLookClose, this.villager, this.profession);
 
         this.npc = (net.citizensnpcs.api.npc.NPC) npcData.get(0);
-        this.stand = (ArmorStand) npcData.get(1);
-        this.click = (ArmorStand) npcData.get(2);
-
-        Skyblock.getPlugin().addRemoveable(this.stand);
-        Skyblock.getPlugin().addRemoveable(this.click);
     }
 
     @EventHandler
@@ -58,17 +53,23 @@ public class NPC implements Listener {
 
         this.action.accept(player);
 
-        Bukkit.getPluginManager().callEvent(new SkyblockNPCClickEvent(player, this));
+        Bukkit.getPluginManager().callEvent(new SkyblockPlayerNPCClickEvent(player, this));
     }
 
     public static void sendMessages(Player player, String npc, String... messages) {
+        SkyblockPlayer skyblockPlayer = SkyblockPlayer.getPlayer(player);
+
+        if (skyblockPlayer.isTalkingToNPC()) return;
+
+        skyblockPlayer.setExtraData("isInteracting", true);
+
         int i = 0;
         for (String message : messages) {
-            Util.delay(() -> {
-                sendMessage(player, npc, message);
-            }, i * 20);
+            Util.delay(() -> sendMessage(player, npc, message), i * 20);
             i++;
         }
+
+        Util.delay(() -> skyblockPlayer.setExtraData("isInteracting", false), messages.length * 20);
     }
     public static void sendMessage(Player player, String npc, String message) {
         sendMessage(player, npc, message, true);

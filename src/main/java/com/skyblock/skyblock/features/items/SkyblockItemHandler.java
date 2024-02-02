@@ -2,12 +2,14 @@ package com.skyblock.skyblock.features.items;
 
 import com.skyblock.skyblock.Skyblock;
 import com.skyblock.skyblock.features.items.armor.*;
+import com.skyblock.skyblock.features.items.bows.*;
 import com.skyblock.skyblock.features.items.misc.*;
-import com.skyblock.skyblock.features.items.misc.healingWands.*;
 import com.skyblock.skyblock.features.items.tools.*;
 import com.skyblock.skyblock.features.items.weapons.*;
 import com.skyblock.skyblock.utilities.Util;
 import de.tr7zw.nbtapi.NBTItem;
+
+import org.bukkit.block.Biome;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
@@ -24,12 +26,26 @@ public class SkyblockItemHandler {
         sets = new HashMap<>();
 
         // Misc
-        registerItem(new GrapplingHook(plugin));
+        registerItem(new GrapplingHook());
         registerItem(new MaddoxBatphone());
-        registerItem(new MagicalWaterBucket(plugin));
-        registerItem(new WandOfHealing(plugin));
-        registerItem(new WandOfMending(plugin));
-        registerItem(new WandOfRestoration(plugin));
+        registerItem(new MagicalWaterBucket());
+        registerItem(new SummoningEye());
+        registerItem(new SleepingEye());
+        registerItem(new WandOfHealing("WAND_OF_HEALING", 60));
+        registerItem(new WandOfHealing("WAND_OF_MENDING", 100));
+        registerItem(new WandOfHealing("WAND_OF_RESTORATION", 120));
+        registerItem(new BiomeStick("BIRCH_FOREST_BIOME_STICK", Biome.BIRCH_FOREST));
+        registerItem(new BiomeStick("DEEP_OCEAN_BIOME_STICK", Biome.DEEP_OCEAN));
+        registerItem(new BiomeStick("DESERT_BIOME_STICK", Biome.DESERT));
+        //registerItem(new BiomeStick("END_FOREST_BIOME_STICK", Biome.END));
+        registerItem(new BiomeStick("FOREST_BIOME_STICK", Biome.FOREST));
+        registerItem(new BiomeStick("JUNGLE_BIOME_STICK", Biome.JUNGLE));
+        registerItem(new BiomeStick("MESA_BIOME_STICK", Biome.MESA));
+        registerItem(new BiomeStick("SAVANNA_BIOME_STICK", Biome.SAVANNA));
+        registerItem(new BiomeStick("TAIGA_BIOME_STICK", Biome.TAIGA));
+        //registerItem(new BiomeStick("NETHER_BIOME_STICK", Biome.NETHER));
+        registerItem(new BiomeStick("ROOFED_FOREST_BIOME_STICK", Biome.ROOFED_FOREST));
+        registerItem(new PlumberSponge());
 
         // Tools
         registerItem(new PromisingAxe());
@@ -42,16 +58,18 @@ public class SkyblockItemHandler {
         registerItem(new TreeCapitator());
 
         // Weapons
-        registerItem(new AspectOfTheDragons(plugin));
-        registerItem(new AspectOfTheEnd(plugin));
-        registerItem(new EndStoneSword(plugin));
-        registerItem(new RogueSword(plugin));
+        registerItem(new AspectOfTheDragons());
+        registerItem(new AspectOfTheEnd());
+        registerItem(new EndStoneSword());
+        registerItem(new RogueSword());
         registerItem(new AspectOfTheJerry());
         registerItem(new EmberRod());
         registerItem(new EndSword());
-        registerItem(new GolemSword(plugin));
+        registerItem(new Cleaver());
+        registerItem(new GolemSword());
         registerItem(new UndeadSword());
         registerItem(new RevenantFalchion());
+        registerItem(new ReaperFalchion());
         registerItem(new SpiderSword());
         registerItem(new ZombieSword());
         registerItem(new MidasSword());
@@ -60,16 +78,41 @@ public class SkyblockItemHandler {
         registerItem(new TacticiansSword());
         registerItem(new PigmanSword());
         registerItem(new FrozenScythe());
+        registerItem(new ScorpionFoil());
+        registerItem(new FlamingSword());
+        registerItem(new EdibleMace());
+        registerItem(new ShamanSword());
+        registerItem(new LeapingSword());
+        registerItem(new PoochSword());
+        registerItem(new InkWand());
+        registerItem(new SilkEdgeSword());
+        registerItem(new YetiSword());
+        registerItem(new PrismarineBlade());
 
         // Bows
         registerItem(new RunaansBow());
+        registerItem(new EndstoneBow());
+        registerItem(new WitherBow());
+        registerItem(new SavannaBow());
+        registerItem(new MosquitoBow());
+        registerItem(new HurricaneBow());
+        registerItem(new ScorpionBow());
+        registerItem(new EnderBow());
+        registerItem(new ExplosiveBow());
 
         // Armor Sets
-        registerItem(new StrongDragonArmor());
-        registerItem(new SuperiorDragonArmor());
-        registerItem(new WiseDragonArmor());
-        registerItem(new YoungDragonArmor());
-        registerItem(new LapisArmor());
+        registerArmorSet(new StrongDragonArmor());
+        registerArmorSet(new SuperiorDragonArmor());
+        registerArmorSet(new WiseDragonArmor());
+        registerArmorSet(new YoungDragonArmor());
+        registerArmorSet(new LapisArmor());
+        registerArmorSet(new SpeedsterArmor());
+        registerArmorSet(new SpongeArmor());
+        registerArmorSet(new LeafletArmor());
+        registerArmorSet(new UnstableDragonArmor());
+        registerArmorSet(new GolemArmor());
+        registerArmorSet(new EmeraldArmor());
+        registerArmorSet(new MinersOutfit());
     }
 
     public ArrayList<ItemStack> getItems() {
@@ -109,7 +152,7 @@ public class SkyblockItemHandler {
         return items.get(s);
     }
 
-    private void registerItem(ArmorSet set){
+    private void registerArmorSet(ArmorSet set){
         sets.put(set.getId(), set);
     }
 

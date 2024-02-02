@@ -1,16 +1,15 @@
 package com.skyblock.skyblock.features.items.weapons;
 
 import com.skyblock.skyblock.enums.SkyblockStat;
-import com.skyblock.skyblock.event.SkyblockCoinsChangeEvent;
+import com.skyblock.skyblock.events.SkyblockPlayerCoinUpdateEvent;
 import com.skyblock.skyblock.features.items.DynamicLore;
 import com.skyblock.skyblock.features.items.ListeningItem;
 import com.skyblock.skyblock.utilities.Util;
 import com.skyblock.skyblock.utilities.item.ItemBase;
 import de.tr7zw.nbtapi.NBTItem;
-import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.inventory.ItemStack;
 
 public class EmeraldBlade extends ListeningItem implements DynamicLore {
@@ -19,21 +18,25 @@ public class EmeraldBlade extends ListeningItem implements DynamicLore {
     }
 
     @EventHandler
-    public void onCoin(SkyblockCoinsChangeEvent e) {
-        for (ItemStack item : e.getPlayer().getBukkitPlayer().getInventory().getContents()) {
+    public void onCoin(SkyblockPlayerCoinUpdateEvent e) {
+        Player bukkit = e.getPlayer().getBukkitPlayer();
+
+        for (int slot = 0; slot < bukkit.getInventory().getSize(); slot++) {
+            ItemStack item = bukkit.getInventory().getItem(slot);
+
             if (!Util.notNull(item)) continue;
             if (!Util.getSkyblockId(item).equals(getInternalName())) continue;
 
             try {
                 NBTItem nbt = new NBTItem(item);
-                nbt.setInteger("emeraldblade_damage", (int) Math.floor(2.5 * Math.pow(e.getPlayer().getCoins(), 1.0 / 4.0)));
+                nbt.setInteger("emeraldblade_damage", Math.min(1000, (int) (2.5 * Math.pow(e.getPlayer().getCoins(), 1.0 / 4.0))));
 
                 ItemBase base = new ItemBase(nbt.getItem());
                 base.setDamage(130 + base.getReforge().getReforgeData(base.getRarityEnum()).get(SkyblockStat.DAMAGE) + nbt.getInteger("emeraldblade_damage"));
 
                 replaceLore(base);
-                e.getPlayer().getBukkitPlayer().getInventory().remove(item);
-                e.getPlayer().getBukkitPlayer().getInventory().addItem(base.getStack());
+
+                bukkit.getInventory().setItem(slot, base.createStack());
             } catch (IllegalArgumentException ignored) { }
         }
     }

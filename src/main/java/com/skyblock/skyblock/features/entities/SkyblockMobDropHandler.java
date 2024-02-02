@@ -1,10 +1,7 @@
 package com.skyblock.skyblock.features.entities;
 
 import com.skyblock.skyblock.Skyblock;
-import com.skyblock.skyblock.utilities.Util;
 import net.minecraft.server.v1_8_R3.Item;
-import org.bukkit.Bukkit;
-import org.bukkit.Material;
 import org.bukkit.craftbukkit.v1_8_R3.inventory.CraftItemStack;
 import org.bukkit.inventory.ItemStack;
 import org.json.simple.JSONArray;
@@ -41,7 +38,7 @@ public class SkyblockMobDropHandler {
                 BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(Files.newInputStream(file.toPath()), StandardCharsets.UTF_8));
                 Object obj = parser.parse(bufferedReader);
 
-                JSONObject jsonObject =  (JSONObject) obj;
+                JSONObject jsonObject = (JSONObject) obj;
 
                 String entityName = file.getName().replace(".json", "");
 
@@ -87,7 +84,7 @@ public class SkyblockMobDropHandler {
                                 ItemStack item = CraftItemStack.asNewCraftStack(nms);
 
                                 List<EntityDrop> drops = loot_tables.get(entityName);
-                                drops.add(new EntityDrop(item, EntityDropRarity.GUARANTEED, 1.0, min, max));
+                                drops.add(new EntityDrop(item, EntityDropRarity.COMMON, 100, min, max));
                                 loot_tables.put(entityName, drops);
                             }
                         }
@@ -102,7 +99,12 @@ public class SkyblockMobDropHandler {
         }
     }
 
-    public List<EntityDrop> getDrops(String name) { return loot_tables.get(name); }
+    public List<EntityDrop> getDrops(String name) {
+        return loot_tables.get(name);
+    }
 
-    public int getCoins(String name) { return coins.get(name); }
+    public int getCoins(String name) {
+        if (coins.containsKey(name)) return coins.get(name);
+        return 0;
+    }
 }

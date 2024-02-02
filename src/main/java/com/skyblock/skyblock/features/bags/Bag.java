@@ -5,7 +5,6 @@ import com.mojang.authlib.properties.Property;
 import com.skyblock.skyblock.Skyblock;
 import com.skyblock.skyblock.SkyblockPlayer;
 import com.skyblock.skyblock.utilities.Util;
-import com.skyblock.skyblock.utilities.item.ItemBuilder;
 import de.tr7zw.nbtapi.NBTItem;
 import lombok.Data;
 import org.bukkit.Bukkit;
@@ -21,11 +20,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 
 import java.lang.reflect.Field;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.UUID;
+import java.util.*;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 
@@ -46,7 +42,6 @@ public class Bag implements Listener {
     private final BiConsumer<SkyblockPlayer, ItemStack> onPutItem;
     private final BiConsumer<SkyblockPlayer, ItemStack> onRemoveItem;
 
-
     public Bag(String id, String name, String headValue, String lore, int skyblockMenuSlot, Predicate<ItemStack> validate, BiConsumer<SkyblockPlayer, Inventory> onOpen, BiConsumer<SkyblockPlayer, ItemStack> onPutItem, BiConsumer<SkyblockPlayer, ItemStack> onRemoveItem) {
         this.skyblockMenuSlot = skyblockMenuSlot;
         this.onRemoveItem = onRemoveItem;
@@ -63,6 +58,24 @@ public class Bag implements Listener {
         Bukkit.getPluginManager().registerEvents(this, Skyblock.getPlugin(Skyblock.class));
     }
 
+    public List<ItemStack> getContents(Player player) {
+        SkyblockPlayer skyblockPlayer = SkyblockPlayer.getPlayer(player);
+
+        int limit = this.getSlots.applyAsInt(skyblockPlayer);
+
+        List<ItemStack> contents = new ArrayList<>();
+
+        for (int i = 0; i < limit; i++) {
+            ItemStack item = (ItemStack) skyblockPlayer.getValue("bag." + this.id + ".items." + i);
+
+            if (item == null || item.getType() == Material.AIR) continue;
+
+            if (this.validate.test(item)) contents.add(item);
+        }
+
+        return contents;
+    }
+
     public Inventory show(Player player) {
         int limit = this.getSlots.applyAsInt(SkyblockPlayer.getPlayer(player));
 
@@ -70,9 +83,13 @@ public class Bag implements Listener {
 
         int inventorySize = this.getSlots.applyAsInt(SkyblockPlayer.getPlayer(player)) + 9;
 
+        while (inventorySize % 9 != 0) {
+            inventorySize++;
+        }
+
         Inventory inventory = Bukkit.createInventory(null, inventorySize, this.name);
 
-        for (int i = limit; i < inventorySize; i++) inventory.setItem(i, new ItemBuilder(" ", Material.STAINED_GLASS_PANE, (short) 15).toItemStack());
+        Util.fillEmpty(inventory);
 
         for (int i = 0; i < limit; i++) {
             inventory.setItem(i, new ItemStack(Material.AIR));
@@ -135,40 +152,34 @@ public class Bag implements Listener {
         if (event.getSlot() < limit) {
             if (event.getCurrentItem() == null) return;
 
-            if (event.getCursor().getAmount() > 1) {
-                event.getWhoClicked().sendMessage(ChatColor.RED + "Bags only support single items!");
-                event.setCancelled(true);
-                return;
-            }
-
             if (!this.validate.test(event.getCursor()) && event.getAction() != InventoryAction.PICKUP_ONE && event.getAction() != InventoryAction.PICKUP_ALL) {
                 event.getWhoClicked().sendMessage(ChatColor.RED + "You cannot put this item in this bag!");
                 event.setCancelled(true);
                 return;
             }
 
-            HashMap<Integer, ItemStack> items = new HashMap<>();
+            Util.delay(() -> {
+                HashMap<Integer, ItemStack> items = new HashMap<>();
 
-            for (int i = 0; i < limit; i++) items.put(i, event.getClickedInventory().getItem(i));
+                for (int i = 0; i < limit; i++) items.put(i, event.getClickedInventory().getItem(i));
 
-            items.put(event.getSlot(), event.getCursor());
+                SkyblockPlayer skyblockPlayer = SkyblockPlayer.getPlayer(((Player) event.getWhoClicked()).getPlayer());
 
-            SkyblockPlayer skyblockPlayer = SkyblockPlayer.getPlayer(((Player) event.getWhoClicked()).getPlayer());
-
-            if (Util.notNull(event.getCursor())) {
-                onPutItem.accept(skyblockPlayer, event.getCursor());
-            } else {
-                onRemoveItem.accept(skyblockPlayer, event.getCurrentItem());
-            }
-
-            for (int slot : items.keySet()) {
-                if (items.get(slot) == null) {
-                    skyblockPlayer.setValue("bag." + this.id + ".items." + slot, new ItemStack(Material.AIR));
-                    continue;
+                if (Util.notNull(event.getCursor())) {
+                    onPutItem.accept(skyblockPlayer, event.getCursor());
+                } else {
+                    onRemoveItem.accept(skyblockPlayer, event.getCurrentItem());
                 }
 
-                skyblockPlayer.setValue("bag." + this.id + ".items." + slot, items.get(slot));
-            }
+                for (int slot : items.keySet()) {
+                    if (items.get(slot) == null) {
+                        skyblockPlayer.setValue("bag." + this.id + ".items." + slot, new ItemStack(Material.AIR));
+                        continue;
+                    }
+
+                    skyblockPlayer.setValue("bag." + this.id + ".items." + slot, items.get(slot));
+                }
+            }, 1);
         }
 
         if (event.getCurrentItem() == null || event.getCurrentItem().getType() == Material.AIR) return;

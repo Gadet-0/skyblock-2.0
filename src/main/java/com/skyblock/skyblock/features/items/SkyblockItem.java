@@ -4,11 +4,13 @@ import com.inkzzz.spigot.armorevent.PlayerArmorEquipEvent;
 import com.inkzzz.spigot.armorevent.PlayerArmorUnequipEvent;
 import com.skyblock.skyblock.Skyblock;
 import com.skyblock.skyblock.SkyblockPlayer;
-import com.skyblock.skyblock.event.SkyblockEntityDamageByPlayerEvent;
+import com.skyblock.skyblock.events.SkyblockPlayerDamageEntityEvent;
+import com.skyblock.skyblock.utilities.Util;
 import com.skyblock.skyblock.utilities.item.ItemBase;
 import lombok.Getter;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
@@ -27,6 +29,11 @@ public abstract class SkyblockItem {
         this.internalName = internalName;
     }
 
+    public SkyblockItem(String internalName) {
+        this.internalName = internalName;
+        this.item = plugin.getItemHandler().getItem(internalName);
+    }
+
     public void onRightClick(PlayerInteractEvent event, HashMap<String, Object> data) {
         throw new UnsupportedOperationException("This item does not support right clicking");
     }
@@ -43,7 +50,7 @@ public abstract class SkyblockItem {
         throw new UnsupportedOperationException("This item does not support dealing damage");
     }
 
-    public void onEntityDamage(SkyblockEntityDamageByPlayerEvent event) {
+    public void onEntityDamage(SkyblockPlayerDamageEntityEvent event) {
         throw new UnsupportedOperationException("This item does not support dealing damage");
     }
 
@@ -63,7 +70,15 @@ public abstract class SkyblockItem {
         throw new UnsupportedOperationException("This item does not support regeneration");
     }
 
+    public double getModifiedIncomingDamage(SkyblockPlayer player, EntityDamageEvent event, double damage) {
+        return damage;
+    }
+
     public double getModifiedDamage(SkyblockPlayer player, EntityDamageByEntityEvent e, double damage) {
         return damage;
+    }
+
+    protected boolean isThisItem(ItemStack item) {
+        return Util.getSkyblockId(item).equals(Util.getSkyblockId(getItem()));
     }
 }

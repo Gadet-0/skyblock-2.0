@@ -7,26 +7,23 @@ import com.skyblock.skyblock.features.crafting.SkyblockRecipe;
 import com.skyblock.skyblock.features.enchantment.ItemEnchantment;
 import com.skyblock.skyblock.features.enchantment.SkyblockEnchantment;
 import com.skyblock.skyblock.features.enchantment.SkyblockEnchantmentHandler;
+import com.skyblock.skyblock.features.items.browser.BrowserCategory;
 import com.skyblock.skyblock.features.pets.Pet;
 import com.skyblock.skyblock.features.pets.PetType;
 import com.skyblock.skyblock.features.potions.PotionEffect;
 import com.skyblock.skyblock.utilities.Util;
 import de.tr7zw.nbtapi.NBTItem;
 import lombok.Getter;
-import net.minecraft.server.v1_8_R3.Enchantment;
 import net.minecraft.server.v1_8_R3.Item;
 import net.minecraft.server.v1_8_R3.MojangsonParseException;
 import net.minecraft.server.v1_8_R3.MojangsonParser;
 import org.apache.commons.lang.WordUtils;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
-import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.craftbukkit.v1_8_R3.inventory.CraftItemStack;
-import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.inventory.meta.PotionMeta;
-import org.bukkit.potion.Potion;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -45,10 +42,13 @@ import java.util.function.Function;
 public class ItemHandler {
     private final HashMap<String, ItemStack> items = new HashMap<>();
     private final HashMap<ItemStack, String> reversed = new HashMap<>();
+    private final HashMap<BrowserCategory, List<ItemStack>> categories = new HashMap<>();
     private final Skyblock skyblock;
 
     public static final List<String> POTIONS = new ArrayList<String>() {{
         add("strength");
+        add("speed");
+        add("healing");
     }};
 
     public static final List<String> ITEM_EXCLUSIONS = new ArrayList<String>() {{
@@ -103,67 +103,79 @@ public class ItemHandler {
     public void init() {
         File folder = new File(skyblock.getDataFolder() + File.separator + "items");
 
-        for (File file : Objects.requireNonNull(folder.listFiles())) {
-            try {
-                JSONParser parser = new JSONParser();
-                BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(Files.newInputStream(file.toPath()), StandardCharsets.UTF_8));
-                Object obj = parser.parse(bufferedReader);
+        try {
+            for (File file : Objects.requireNonNull(folder.listFiles())) {
+                try {
+                    JSONParser parser = new JSONParser();
+                    BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(Files.newInputStream(file.toPath()), StandardCharsets.UTF_8));
+                    Object obj = parser.parse(bufferedReader);
 
-                JSONObject jsonObject =  (JSONObject) obj;
-                String itemId = (String) jsonObject.get("itemid");
-                String displayName = (String) jsonObject.get("displayname");
+                    JSONObject jsonObject = (JSONObject) obj;
+                    String itemId = (String) jsonObject.get("itemid");
+                    String displayName = (String) jsonObject.get("displayname");
 
-                String nbt = (String) jsonObject.get("nbttag");
+                    String nbt = (String) jsonObject.get("nbttag");
 
-                long damage = (long) jsonObject.get("damage");
+                    long damage = (long) jsonObject.get("damage");
 
-                JSONArray lore = (JSONArray) jsonObject.get("lore");
+                    JSONArray lore = (JSONArray) jsonObject.get("lore");
 
-                ItemStack item = CraftItemStack.asNewCraftStack(Item.d(itemId));
-                item.setDurability((short) damage);
+                    ItemStack item = CraftItemStack.asNewCraftStack(Item.d(itemId));
+                    item.setDurability((short) damage);
 
-                ItemMeta meta = item.getItemMeta();
-                meta.setDisplayName(displayName);
+                    ItemMeta meta = item.getItemMeta();
+                    meta.setDisplayName(displayName);
 
-                //noinspection unchecked
-                meta.setLore(lore);
-                meta.spigot().setUnbreakable(true);
+                    meta.setLore(lore);
+                    meta.spigot().setUnbreakable(true);
 
-                item.setItemMeta(meta);
+                    item.setItemMeta(meta);
 
-                net.minecraft.server.v1_8_R3.ItemStack nms = CraftItemStack.asNMSCopy(item);
-                nms.setTag(MojangsonParser.parse(nbt));
+                    net.minecraft.server.v1_8_R3.ItemStack nms = CraftItemStack.asNMSCopy(item);
+                    nms.setTag(MojangsonParser.parse(nbt));
 
-                NBTItem nbtItem = new NBTItem(CraftItemStack.asBukkitCopy(nms));
-                nbtItem.setString("skyblockId", file.getName().replace(".json", "").toLowerCase());
+                    NBTItem nbtItem = new NBTItem(CraftItemStack.asBukkitCopy(nms));
+                    nbtItem.setString("skyblockId", file.getName().replace(".json", "").toLowerCase());
 
-                ItemStack clone = nbtItem.getItem().clone();
-                ItemMeta cloneMeta = clone.getItemMeta();
-                cloneMeta.spigot().setUnbreakable(true);
+                    ItemStack clone = nbtItem.getItem().clone();
+                    ItemMeta cloneMeta = clone.getItemMeta();
+                    cloneMeta.spigot().setUnbreakable(true);
 
-                List<String> clonedLore = cloneMeta.getLore();
+                    List<String> clonedLore = cloneMeta.getLore();
 
-                if (clonedLore.contains(ChatColor.YELLOW + "Click to view recipe!")) {
-                    clonedLore.remove(clonedLore.size() - 1);
-                    clonedLore.remove(clonedLore.size() - 1);
+                    if (clonedLore.contains(ChatColor.YELLOW + "Click to view recipe!")) {
+                        clonedLore.remove(clonedLore.size() - 1);
+                        clonedLore.remove(clonedLore.size() - 1);
+                    }
+
+                    cloneMeta.setLore(clonedLore);
+                    clone.setItemMeta(cloneMeta);
+
+                    register(file.getName(), clone);
+
+                    if (jsonObject.get("recipe") != null) {
+                        JSONObject recipe = (JSONObject) jsonObject.get("recipe");
+                        Skyblock.getPlugin(Skyblock.class).getRecipeHandler().getRecipes().add(
+                                new SkyblockRecipe(recipe, getItem(file.getName())));
+                    }
+
+                    bufferedReader.close();
+                } catch (MojangsonParseException | ParseException | IOException ex) {
+                    ex.printStackTrace();
+                    return;
                 }
-
-                cloneMeta.setLore(clonedLore);
-                clone.setItemMeta(cloneMeta);
-
-                register(file.getName(), clone);
-
-                if (jsonObject.get("recipe") != null) {
-                    JSONObject recipe = (JSONObject) jsonObject.get("recipe");
-                    Skyblock.getPlugin(Skyblock.class).getRecipeHandler().getRecipes().add(
-                            new SkyblockRecipe(recipe, getItem(file.getName())));
-                }
-
-                bufferedReader.close();
-            } catch (MojangsonParseException | ParseException | IOException ex) {
-                ex.printStackTrace();
-                return;
             }
+        } catch (NullPointerException ex) {
+            Skyblock.getPlugin().sendMessage("&c=============================================");
+            Skyblock.getPlugin().sendMessage("&c  &4ERROR&c &cCould not find items folder!");
+            Skyblock.getPlugin().sendMessage("&c  &4ERROR&c &cPlease make sure you have");
+            Skyblock.getPlugin().sendMessage("&c  &4ERROR&c &cthe items folder in the plugin");
+            Skyblock.getPlugin().sendMessage("&c  &4ERROR&c &cdata folder, located at:");
+            Skyblock.getPlugin().sendMessage("&c  &4ERROR&c &chttps://github.com/Exortions/skyblock-2.0/tree/master/dependencies/skyblock/");
+            Skyblock.getPlugin().sendMessage("&c=============================================");
+
+            Bukkit.getPluginManager().disablePlugin(Skyblock.getPlugin());
+            return;
         }
 
         registerCustomItems();
@@ -208,19 +220,22 @@ public class ItemHandler {
         ).createStack());
 
         for (Rarity r : Rarity.values()) {
+            if (r.equals(Rarity.VERY_SPECIAL)) continue;
+            if (r.equals(Rarity.SPECIAL)) continue;
+            if (r.equals(Rarity.MYTHIC)) continue;
+            if (r.equals(Rarity.DIVINE)) continue;
+
             for (PetType type : PetType.values()) {
                 Pet pet = type.newInstance();
                 if (pet == null) continue;
                 pet.setRarity(r);
-                items.put(type.name(), pet.toItemStack());
+                items.put(type.name() + "_" + r.toString().toUpperCase() + ".json", pet.toItemStack());
             }
-
-            if (r.equals(Rarity.LEGENDARY)) break;
-
         }
+
         for (String pot : POTIONS) {
             for (int i = 0; i < PotionEffect.getMaxLevelsAndColors.get(pot).getFirst(); i++) {
-                items.put(pot + "_" + i + 1, Util.createPotion(pot, i + 1, 12000));
+                items.put((pot + "_" + (i + 1)).toUpperCase() + ".json", Util.createPotion(pot, i + 1, 12000));
             }
         }
 
@@ -228,10 +243,10 @@ public class ItemHandler {
 
         for (SkyblockEnchantment enchant : enchantmentHandler.getEnchantments()) {
             for (int i = 1; i <= enchant.getMaxLevel(); i++) {
+                List<String> desc = new ArrayList<>(Arrays.asList(ChatColor.GRAY + "Use this on an item in an Anvil", ChatColor.GRAY + "to apply it!", " "));
+                ItemBase base = new ItemBase(Material.ENCHANTED_BOOK, ChatColor.WHITE + "Enchanted Book", Reforge.NONE, 1, desc, Collections.singletonList(new ItemEnchantment(enchant, i)), true, false, "", Arrays.asList("placeholder description", "placeholder description", "placeholder description"), "", 0, "", "common", "enchanted_book_" + enchant.getName() + "_" + i, 0, 0, 0, 0, 0, 0, 0, 0, 0, false);
                 items.put(enchant.getName().toUpperCase() + ";" + i + ".json",
-                        new ItemBuilder(ChatColor.WHITE + "Enchanted Book", Material.ENCHANTED_BOOK)
-                                .addLore(ChatColor.BLUE + enchant.getDisplayName() + " " + Util.toRoman(i)).addLore(Util.enchantLore(enchant.getDescription(i)))
-                                .addLore(" ", "&7Use this on an item in an Anvil", "&7to apply it!", " ", ChatColor.WHITE + "" + ChatColor.BOLD + "COMMON").toItemStack());
+                        base.createStack());
             }
         }
 
@@ -240,15 +255,61 @@ public class ItemHandler {
 
     public void register(String id, ItemStack item) {
         for (String potion : POTIONS) {
-            if (item.getItemMeta().getDisplayName().toLowerCase().contains(potion) && item.getType().equals(Material.POTION)) return;
+            if (item.getItemMeta().getDisplayName().toLowerCase().contains(potion) && item.getType().equals(Material.POTION))
+                return;
         }
 
         items.put(id, parseLore(item));
         reversed.put(parseLore(item), id.replace(".json", ""));
     }
 
+    private static final List<String> stackableHeads = Arrays.asList("fragment");
     public ItemStack getItem(String s) {
-        return items.get(s);
+        if (!s.endsWith(".json")) {
+            s = s.toUpperCase();
+            s += ".json";
+        }
+
+        ItemStack item = items.get(s);
+
+        if (item == null) return null;
+
+        if (item.getType().equals(Material.SKULL_ITEM)) {
+
+            for (String stackables : stackableHeads) {
+                if (item.getItemMeta().getDisplayName().toLowerCase().contains(stackables)) return item.clone();
+            }
+
+            NBTItem nbt = new NBTItem(item.clone());
+            nbt.setString(UUID.randomUUID().toString(), "dontstackanymoreplease");
+
+            return nbt.getItem();
+        }
+
+        return item.clone();
+    }
+
+    public ItemStack getItem(ItemStack item) {
+        NBTItem nbt = new NBTItem(item);
+        ItemStack skyblock = item;
+
+        if (nbt.hasKey("skyblockId") && skyblock.getType() != Material.ENCHANTED_BOOK) {
+            skyblock = getItem(Util.getSkyblockId(item));
+        }
+
+        if (item.getType().equals(Material.SKULL_ITEM)) {
+
+            for (String stackables : stackableHeads) {
+                if (item.getItemMeta().getDisplayName().toLowerCase().contains(stackables)) return item.clone();
+            }
+
+            nbt = new NBTItem(item.clone());
+            nbt.setString(UUID.randomUUID().toString(), "dontstackanymoreplease");
+
+            return nbt.getItem();
+        }
+
+        return skyblock.clone();
     }
 
     private ItemStack parseLore(ItemStack item) {
@@ -342,8 +403,8 @@ public class ItemHandler {
                         if (raw.startsWith("this item can be reforged!") ||
                                 raw.startsWith("cooldown: ") ||
                                 raw.startsWith("mana cost: ") ||
-                            j == lore.size() - 1){
-                            i = j-1;
+                                j == lore.size() - 1) {
+                            i = j - 1;
                             break;
                         }
 
@@ -364,8 +425,8 @@ public class ItemHandler {
                     for (int j = i; j < lore.size(); j++) {
                         String raw = ChatColor.stripColor(lore.get(j)).toLowerCase();
                         if (raw.startsWith("this item can be reforged!") ||
-                            raw.startsWith("item ability: ") ||
-                            j == lore.size() - 1){
+                                raw.startsWith("item ability: ") ||
+                                j == lore.size() - 1) {
                             i = j;
                             break;
                         }

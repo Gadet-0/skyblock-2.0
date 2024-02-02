@@ -2,26 +2,30 @@ package com.skyblock.skyblock.features.minions;
 
 import com.skyblock.skyblock.Skyblock;
 import com.skyblock.skyblock.SkyblockPlayer;
-import com.skyblock.skyblock.enums.MiningMinionType;
-import com.skyblock.skyblock.enums.MinionType;
+import com.skyblock.skyblock.features.crafting.SkyblockRecipe;
 import com.skyblock.skyblock.features.island.IslandManager;
+import com.skyblock.skyblock.features.minions.items.MinionItem;
+import com.skyblock.skyblock.features.minions.types.CobblestoneMinion;
 import com.skyblock.skyblock.utilities.Util;
 import com.skyblock.skyblock.utilities.item.ItemBuilder;
-import lombok.AllArgsConstructor;
+import de.tr7zw.nbtapi.NBTItem;
 import lombok.Data;
-import lombok.Getter;
 import org.apache.commons.lang.WordUtils;
 import org.bukkit.*;
 import org.bukkit.configuration.serialization.ConfigurationSerializable;
 import org.bukkit.configuration.serialization.SerializableAs;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.util.ChatPaginator;
 
 import java.util.*;
 import java.util.function.Function;
 
 public class MinionHandler {
+
+    private final HashMap<UUID, List<MinionSerializable>> minions;
 
     public static ItemStack MINION_INVENTORY_PICKUP_MINION = new ItemBuilder(ChatColor.GREEN + "Pickup Minion", Material.BEDROCK).addLore(ChatColor.YELLOW + "Click to pickup!").toItemStack();
     public static ItemStack MINION_INVENTORY_COLLECT_ALL = new ItemBuilder(ChatColor.GREEN + "Collect All", Material.CHEST).addLore(ChatColor.YELLOW + "Click to collect all items!").toItemStack();
@@ -34,13 +38,13 @@ public class MinionHandler {
     public static Function<MinionBase, ItemStack> createMinionPreview = (minion) -> {
         ItemStack stack = new ItemBuilder(
                 ChatColor.BLUE +
-                        WordUtils.capitalize(minion.getType().name().toLowerCase().replace("_", " ")) +
+                        WordUtils.capitalize(minion.getName()) +
                         " Minion " +
                         Util.toRoman(minion.getLevel()),
                 Material.SKULL_ITEM
         ).toItemStack();
 
-        stack = Util.idToSkull(stack, minion.getHead().apply(minion.getLevel()));
+        stack = Util.idToSkull(stack, minion.getHead(minion.getLevel()));
 
         ItemMeta meta = stack.getItemMeta();
 
@@ -48,13 +52,12 @@ public class MinionHandler {
                 Arrays.asList(
                     Util.buildLore(
                             "Place this minion and it will\nstart generating and " +
-                                    MinionTypeAdjective.valueOf(minion.getType().getDeclaringClass().getSimpleName().toUpperCase().replace("MINIONTYPE", "")) +
-                                    "\n" +
-                                    minion.getType().name().toLowerCase().replace("_", " ") + "!" +
-                                    " Requires an open\narea to place " + minion.getType().name().toLowerCase().replace("_", " ") + ".\n" +
+                                    minion.getAdjective() + "\n" +
+                                    minion.getName().toLowerCase() + "!" +
+                                    " Requires an open\narea to place " + minion.getName().toLowerCase() + ".\n" +
                                     "Minions also work when you are\noffline!" +
-                                    "\n\nTime Between Action: &a" + minion.getTimeBetweenActions() + "s\n" +
-                                    "Max Storage: &e" + minion.getMaxStorage() + "\n" +
+                                    "\n\nTime Between Action: &a" + minion.getActionDelay(minion.getLevel()) + "s\n" +
+                                    "Max Storage: &e" + minion.getMaxStorage(minion.getLevel()) + "\n" +
                                     "Resources Generated: &b" + minion.getResourcesGenerated(),
                             '7'
                     )
@@ -66,12 +69,85 @@ public class MinionHandler {
         return stack;
     };
 
-    @Getter
-    @AllArgsConstructor
-    public enum MinionTypeAdjective {
-        MINING("mining");
+    public static ItemStack createNextTierItem(MinionBase minion) {
+        if (minion.getLevel() >= 11) return new ItemBuilder(ChatColor.GREEN + "Next Tier", Material.GOLD_INGOT).addLore("&7The highest tier of this minion", "&7has been reached!", " ", ChatColor.GREEN + "Highest tier has been reached!").toItemStack();
 
-        private final String value;
+        ItemBuilder builder = new ItemBuilder(ChatColor.GREEN + "Next Tier", Material.GOLD_INGOT)
+                .addLore("&7View the items required to", "&7upgrade this minion to the next", "&7tier.", " ",
+                        "&7Time Between Actions: &a" + minion.getActionDelay(minion.getLevel()) + "s",
+                        "&7Max Storage: " + ChatColor.DARK_GRAY + minion.getMaxStorage(minion.getLevel()) + " -> " + ChatColor.YELLOW + minion.getNextMaxStorage(),
+                        " ", ChatColor.YELLOW + "Click to view!");
+
+        return builder.toItemStack();
+    }
+
+    public static ItemStack createQuickUpgrade(MinionBase minion, Player player) {
+        ItemBuilder builder = new ItemBuilder(ChatColor.GREEN + "Quick-Upgrade Minion", Material.DIAMOND)
+                .addLore("&7Click here to upgrade your", "&7minion to the next tier.", " ");
+
+        if (minion.getLevel() >= 11){
+            builder.addLore(ChatColor.RED + "This minion has reached the", ChatColor.RED + "maximum tier.");
+            return builder.toItemStack();
+        }
+
+        builder.addLore(ChatColor.GRAY + "Time Between Actions: &a" + minion.getActionDelay(minion.getLevel()) + "s",
+                ChatColor.GRAY + "Max Storage: " + ChatColor.DARK_GRAY + minion.getMaxStorage(minion.getLevel()) + " -> " + ChatColor.YELLOW + minion.getNextMaxStorage(), " ");
+
+        SkyblockRecipe recipe = Skyblock.getPlugin().getRecipeHandler().getRecipe(Skyblock.getPlugin().getItemHandler().getItem(minion.getMaterial().name().replaceAll("_ORE", "") + "_GENERATOR_" + (minion.getLevel() + 1) + ".json"));
+
+        HashMap<ItemStack, Integer> items = new HashMap<>();
+        for (String item : recipe.getItems()) {
+            if (recipe.getItems().indexOf(item) == 4) continue;
+
+            String[] split = item.split(":");
+            ItemStack neu = Skyblock.getPlugin().getItemHandler().getItem(split[0] + ".json");
+            int amount = Integer.parseInt(split[1]);
+
+            if (!items.containsKey(neu)) {
+                items.put(neu, amount);
+                continue;
+            }
+
+            items.put(neu, items.get(neu) + amount);
+        }
+
+        StringBuilder req = new StringBuilder(ChatColor.RED + "You need ");
+
+        Map<String, Object> map = new HashMap<>();
+
+        for (ItemStack item : items.keySet()) {
+            int amount = items.get(item);
+
+            int inInventory = 0;
+
+            map.put("item", item.getItemMeta().getDisplayName());
+            map.put("amount", amount);
+
+            for (ItemStack inv : player.getInventory().getContents()) {
+                if (inv == null) continue;
+                if (!inv.hasItemMeta()) continue;
+                if (!inv.getItemMeta().hasDisplayName()) continue;
+                if (inv.getItemMeta().getDisplayName().equals(item.getItemMeta().getDisplayName())) inInventory += inv.getAmount();
+            }
+
+            if (inInventory < amount)
+                req.append(ChatColor.GOLD).append(amount - inInventory).append(" ").append(ChatColor.RED).append("more ").append(ChatColor.stripColor(item.getItemMeta().getDisplayName()));
+        }
+
+        if (req.toString().equals(ChatColor.RED + "You need ")) {
+            builder.addLore(ChatColor.YELLOW + "Click to upgrade!");
+        } else {
+            builder.addLore(ChatPaginator.wordWrap(req.toString(), 17));
+        }
+
+        NBTItem nbt = new NBTItem(builder.toItemStack());
+
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            if (entry.getValue() instanceof String) nbt.setString(entry.getKey(), (String) entry.getValue());
+            if (entry.getValue() instanceof Integer) nbt.setInteger(entry.getKey(), (int) entry.getValue());
+        }
+
+        return nbt.getItem();
     }
 
     @Data
@@ -79,7 +155,7 @@ public class MinionHandler {
     public static class MinionSerializable implements ConfigurationSerializable {
 
         private final MinionBase base;
-        private final MinionType<?> type;
+        private final String type;
         private final Location location;
         private final UUID owner;
         private final UUID uuid;
@@ -89,63 +165,59 @@ public class MinionHandler {
         public Map<String, Object> serialize() {
             LinkedHashMap<String, Object> result = new LinkedHashMap<>();
 
-            result.put("type", this.base.getType().name());
+            ArrayList<String> items = new ArrayList<>();
+            for (MinionItem minionItem : base.minionItems) {
+                if (minionItem == null) items.add(null);
+                else items.add(minionItem.getInternalName());
+            }
+
+            result.put("type", this.base.getMaterial().name());
             result.put("location", this.location);
             result.put("owner", this.owner.toString());
             result.put("uuid", this.uuid.toString());
             result.put("level", this.level);
+
+            result.put("inventory", base.getInventory());
+            result.put("items", items);
+            result.put("fuelAmount", base.getFuelAmount());
+            result.put("fuelAddedTime", base.getFuelAddedTime());
 
             return result;
         }
 
         public static MinionSerializable deserialize(Map<String, Object> args) {
             MinionBase base;
-
-            MinionType<?> type;
+            String type;
             Location location;
             UUID owner;
             UUID uuid;
             int level;
 
-            if (args.containsKey("type")) {
-                type = MinionType.getEnumValue((String) args.get("type"));
-            } else {
-                throw new IllegalArgumentException("Could not find serializable class MinionType<?> in serialized data");
-            }
+            type = (String) args.get("type");
+            location = (Location) args.get("location");
+            owner = UUID.fromString((String) args.get("owner"));
+            uuid = UUID.fromString((String) args.get("uuid"));
+            level = (int) args.get("level");
 
-            if (args.containsKey("location")) {
-                location = (Location) args.get("location");
-            } else {
-                throw new IllegalArgumentException("Could not find serializable class Location in serialized data");
-            }
-
-            if (args.containsKey("owner")) {
-                owner = UUID.fromString((String) args.get("owner"));
-            } else {
-                throw new IllegalArgumentException("Could not find serializable class UUID in serialized data");
-            }
-
-            if (args.containsKey("uuid")) {
-                uuid = UUID.fromString((String) args.get("uuid"));
-            } else {
-                throw new IllegalArgumentException("Could not find serializable class UUID in serialized data");
-            }
-
-            if (args.containsKey("level")) {
-                level = (int) args.get("level");
-            } else {
-                throw new IllegalArgumentException("Could not find level in serialized data");
-            }
-
-            if (type instanceof MiningMinionType) base = new MiningMinion((MiningMinionType) type, uuid);
+            if (type.equals(Material.COBBLESTONE.name())) base = new CobblestoneMinion(uuid); // MORE HERE
             else base = null;
+
+            base.setInventory((List<ItemStack>) args.get("inventory"));
+
+            ArrayList<String> itemIDs = (ArrayList<String>) args.get("items");
+
+            for (int i = 0; i < itemIDs.size(); ++i) {
+                base.minionItems[i] = Skyblock.getPlugin().getMinionItemHandler().getRegistered(itemIDs.get(i));
+            }
+
+            base.setFuelAmount((int) args.get("fuelAmount"));
+            base.setFuelAddedTime(((Integer) args.get("fuelAddedTime")).longValue());
+
 
             return new MinionSerializable(base, type, location, owner, uuid, level);
         }
 
     }
-
-    private final HashMap<UUID, List<MinionSerializable>> minions;
 
     public MinionHandler() {
         this.minions = new HashMap<>();
@@ -164,7 +236,7 @@ public class MinionHandler {
 
             World world = Bukkit.createWorld(new WorldCreator(worldName));
 
-            if (world == null) throw new NullPointerException("Minion World is null (" + worldName + ")");
+            if (world == null) throw new IllegalArgumentException("Minion World is null (" + worldName + ")");
 
             try {
                 Chunk chunk = minion.getLocation().getChunk();
@@ -180,11 +252,9 @@ public class MinionHandler {
             }
 
             for (ArmorStand stand : minion.getLocation().getWorld().getEntitiesByClass(ArmorStand.class)) {
-                if (stand.hasMetadata("minion")) {
-                    if (stand.getMetadata("minion_id").get(0).asString().equals(minion.getUuid().toString())) {
-                        found = true;
-                        break;
-                    }
+                if (stand.hasMetadata("minion") && stand.getMetadata("minion_id").get(0).asString().equals(minion.getUuid().toString())) {
+                    found = true;
+                    break;
                 }
             }
 
@@ -200,6 +270,11 @@ public class MinionHandler {
             }
 
             minion.getBase().spawn(player, minion.getLocation(), minion.getLevel());
+
+            long secondsSince = ((System.currentTimeMillis() - (long) player.getValue("island.last_login"))) / 1000;
+            long actionsPerformed = (long) Math.floor((secondsSince / minion.getBase().getActionDelay(minion.getLevel())) / 2);
+
+            for (int i = 0; i < actionsPerformed; i++) minion.getBase().collect(player);
         }
     }
 
@@ -208,7 +283,10 @@ public class MinionHandler {
             this.minions.put(player.getBukkitPlayer().getUniqueId(), new ArrayList<>());
         }
 
-        this.minions.get(player.getBukkitPlayer().getUniqueId()).add(new MinionSerializable(minion, minion.getType(), location, player.getBukkitPlayer().getUniqueId(), minion.getUuid(), minion.getLevel()));
+        MinionSerializable serialize = new MinionSerializable(minion, minion.getMaterial().name(), location, player.getBukkitPlayer().getUniqueId(), minion.getUuid(), minion.getLevel());
+
+        this.minions.get(player.getBukkitPlayer().getUniqueId()).add(serialize);
+        player.getMinions().add(serialize);
     }
 
     public void deleteAll(UUID uuid) {

@@ -2,25 +2,24 @@ package com.skyblock.skyblock.features.blocks;
 
 import com.skyblock.skyblock.Skyblock;
 import com.skyblock.skyblock.SkyblockPlayer;
-import com.skyblock.skyblock.event.SkyblockLogBreakEvent;
+import com.skyblock.skyblock.events.SkyblockPlayerLogBreakEvent;
 import com.skyblock.skyblock.features.location.SkyblockLocation;
 import com.skyblock.skyblock.features.skills.Skill;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import net.minecraft.server.v1_8_R3.Items;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.entity.Item;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.player.PlayerPickupItemEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitRunnable;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Objects;
+import java.util.*;
 
 @SuppressWarnings("deprecation")
 public class RegenerativeBlockHandler implements Listener {
@@ -51,9 +50,9 @@ public class RegenerativeBlockHandler implements Listener {
         put(Material.COBBLESTONE, 7);
     }};
 
-    private static final String[] mines = new String[]{"Coal Mine", "Gold Mine", "Deep Caverns"};
+    private static final String[] mines = new String[]{"Coal Mine", "Gold Mine", "Deep Caverns", "Gunpowder Mines", "Lapis Quarry", "Pigman's Den", "Slimehill", "Diamond Reserve", "Obsidian Sanctuary"};
     private static final String[] farms = new String[]{"Farm", "The Barn", "Mushroom Desert"};
-    private static final String[] forests = new String[]{"Forest", "The Park"};
+    private static final String[] forests = new String[]{"Forest", "The Park", "Birch Park", "Spruce Woods", "Dark Thicket", "Savanna Woodland", "Jungle Island"};
     private static final HashMap<Material, String[]> locations = new HashMap<Material, String[]>() {{
         put(Material.LOG, forests);
         put(Material.LOG_2, forests);
@@ -72,13 +71,13 @@ public class RegenerativeBlockHandler implements Listener {
         put(Material.EMERALD_ORE, mines);
         put(Material.DIAMOND_ORE, mines);
         put(Material.DIAMOND_BLOCK, mines);
-        put(Material.NETHERRACK, new String[]{"Blazing Fortress"});
-        put(Material.QUARTZ_ORE, new String[]{"Blazing Fortress"});
-        put(Material.GLOWSTONE, new String[]{"Blazing Fortress"});
-        put(Material.OBSIDIAN, new String[]{"The End"});
+        put(Material.NETHERRACK, new String[] {"Blazing Fortress"});
+        put(Material.QUARTZ_ORE, new String[] {"Blazing Fortress"});
+        put(Material.GLOWSTONE, new String[] {"Blazing Fortress"});
+        put(Material.OBSIDIAN, new String[] {"Coal Mine", "Gold Mine", "Deep Caverns", "Gunpowder Mines", "Lapis Quarry", "Pigman's Den", "Slimehill", "Diamond Reserve", "Obsidian Sanctuary", "Dragon's Den", "The End"});
         put(Material.ENDER_STONE, new String[]{"The End"});
         put(Material.CROPS, farms);
-        put(Material.CARROT, new String[] { "Farm", "The Barn", "Mushroom Desert", "Mountain" });
+        put(Material.CARROT, new String[] {"Farm", "The Barn", "Mushroom Desert", "Mountain"});
         put(Material.POTATO, farms);
         put(Material.PUMPKIN, farms);
         put(Material.MELON_BLOCK, farms);
@@ -132,12 +131,6 @@ public class RegenerativeBlockHandler implements Listener {
         Skyblock skyblock = Skyblock.getPlugin(Skyblock.class);
 
         if (!player.isNotOnPrivateIsland()) {
-            event.setCancelled(false);
-
-            for (ItemStack item : event.getBlock().getDrops(player.getBukkitPlayer().getItemInHand())) {
-                player.getBukkitPlayer().getWorld().dropItemNaturally(event.getBlock().getLocation(), item);
-            }
-
             return;
         }
 
@@ -163,7 +156,15 @@ public class RegenerativeBlockHandler implements Listener {
                 Skill.reward(Objects.requireNonNull(Skill.parseSkill("Mining")), 1.0, player);
 
                 if (!hasTelekinesis) block.getDrops().forEach(drop -> block.getWorld().dropItemNaturally(block.getLocation(), drop));
-                else player.getBukkitPlayer().getInventory().addItem(block.getDrops().toArray(new ItemStack[0]));
+                else {
+                    for (ItemStack drop : block.getDrops()) {
+                        Item item = block.getWorld().dropItem(block.getLocation().add(0, block.getLocation().getY() + (255 - block.getLocation().getY()), 0), drop);
+
+                        Bukkit.getPluginManager().callEvent(new PlayerPickupItemEvent(player.getBukkitPlayer(), item, 0));
+
+                        item.remove();
+                    }
+                }
                 block.setType(Material.COBBLESTONE);
 
                 new BukkitRunnable() {
@@ -178,7 +179,15 @@ public class RegenerativeBlockHandler implements Listener {
                 Skill.reward(Objects.requireNonNull(Skill.parseSkill("Mining")), 1.0, player);
 
                 if (!hasTelekinesis) block.getDrops().forEach(drop -> block.getWorld().dropItemNaturally(block.getLocation(), drop));
-                else player.getBukkitPlayer().getInventory().addItem(block.getDrops().toArray(new ItemStack[0]));
+                else {
+                    for (ItemStack drop : block.getDrops()) {
+                        Item item = block.getWorld().dropItem(block.getLocation().add(0, block.getLocation().getY() + (255 - block.getLocation().getY()), 0), drop);
+
+                        Bukkit.getPluginManager().callEvent(new PlayerPickupItemEvent(player.getBukkitPlayer(), item, 0));
+
+                        item.remove();
+                    }
+                }
 
                 block.setType(Material.BEDROCK);
 
@@ -268,15 +277,23 @@ public class RegenerativeBlockHandler implements Listener {
         if (hasOverridenDrops(block, player)) {
             player.dropItems(Arrays.asList(getOverrideDrops(block, player)), block.getLocation());
         } else {
-            if (!player.hasTelekinesis())
+            if (!player.hasTelekinesis()) {
                 block.getDrops().forEach(drop -> block.getWorld().dropItemNaturally(block.getLocation(), drop));
-            else player.getBukkitPlayer().getInventory().addItem(block.getDrops().toArray(new ItemStack[0]));
+            } else {
+                for (ItemStack drop : block.getDrops()) {
+                    Item item = block.getWorld().dropItem(block.getLocation().add(0, block.getLocation().getY() + (255 - block.getLocation().getY()), 0), drop);
+
+                    Bukkit.getPluginManager().callEvent(new PlayerPickupItemEvent(player.getBukkitPlayer(), item, 0));
+
+                    item.remove();
+                }
+            }
         }
     }
 
     public void breakNaturalBlock(BlockBreakEvent event, Block block, SkyblockPlayer player, String skill, double xp) {
         if (block.getType().equals(Material.LOG) || block.getType().equals(Material.LOG_2)) {
-            Bukkit.getPluginManager().callEvent(new SkyblockLogBreakEvent(player, block));
+            Bukkit.getPluginManager().callEvent(new SkyblockPlayerLogBreakEvent(player, block));
         }
 
         Skill.reward(Objects.requireNonNull(Skill.parseSkill(skill)), xp, player);

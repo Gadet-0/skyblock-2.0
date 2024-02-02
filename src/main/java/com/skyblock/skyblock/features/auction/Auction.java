@@ -3,7 +3,6 @@ package com.skyblock.skyblock.features.auction;
 import com.skyblock.skyblock.Skyblock;
 import com.skyblock.skyblock.SkyblockPlayer;
 import com.skyblock.skyblock.utilities.Util;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.ComponentBuilder;
@@ -11,11 +10,11 @@ import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,8 +31,10 @@ public class Auction {
     private UUID uuid;
     private List<OfflinePlayer> participants;
     private List<AuctionBid> bidHistory;
+    private AuctionCategory category;
+    private boolean fake = false;
 
-    public Auction(ItemStack item, OfflinePlayer seller, OfflinePlayer topBidder, long price, long timeLeft, boolean isBIN, boolean sold, UUID uuid, List<AuctionBid> bidHistory) {
+    public Auction(ItemStack item, OfflinePlayer seller, OfflinePlayer topBidder, long price, long timeLeft, boolean isBIN, boolean sold, UUID uuid, List<AuctionBid> bidHistory, List<OfflinePlayer> participants) {
         this.item = item;
         this.seller = seller;
         this.topBidder = topBidder;
@@ -43,13 +44,7 @@ public class Auction {
         this.sold = sold;
         this.uuid = uuid;
         this.bidHistory = bidHistory;
-        this.participants = new ArrayList<>();
-
-        for (AuctionBid bid : bidHistory) {
-            participants.add(bid.getBidder());
-        }
-
-        participants.add(seller);
+        this.participants = participants;
     }
 
 
@@ -93,7 +88,7 @@ public class Auction {
         return Math.round(top * 1.15D);
     }
 
-    // screw ui, borrowed from: https://github.com/superischroma/Spectaculation/blob/main/src/main/java/me/superischroma/spectaculation/auction/AuctionItem.java
+    // screw ui, from: https://github.com/superischroma/Spectaculation/blob/main/src/main/java/me/superischroma/spectaculation/auction/AuctionItem.java
     public ItemStack getDisplayItem(boolean inspect, boolean yourAuction) {
         ItemStack stack = getItem().clone();
         ItemMeta meta = stack.getItemMeta();
@@ -131,7 +126,10 @@ public class Auction {
 
     public void claim(Player player) {
         SkyblockPlayer skyblockPlayer = SkyblockPlayer.getPlayer(player);
-        if (player.equals(seller)) {
+
+        player.playSound(player.getLocation(), Sound.NOTE_PLING, 10, 2);
+
+        if (isOwn(player)) {
             if (bidHistory.size() == 0) {
                 player.getInventory().addItem(item);
                 player.sendMessage(ChatColor.YELLOW + "You collected " + getItem().getItemMeta().getDisplayName() + ChatColor.YELLOW + " back from an auction that nobody bought.");
@@ -163,15 +161,18 @@ public class Auction {
     }
 
     private void removeBidderOrOwner(Player player) {
+        participants.remove(player);
+
         if (participants.size() == 0) {
             Skyblock.getPlugin().getAuctionHouse().deleteAuction(this);
         }
-
-        participants.remove(player);
     }
 
     public void bid(Player player, long amount) {
         SkyblockPlayer skyblockPlayer = SkyblockPlayer.getPlayer(player);
+
+        AuctionHouse.FAKE.remove(getUuid());
+        setFake(false);
 
         AuctionBid prev = getBid(player);
         skyblockPlayer.subtractCoins((int) (amount - (prev != null ? prev.getAmount() : 0)));
@@ -223,7 +224,16 @@ public class Auction {
     }
 
     public boolean claimed(Player player) {
-        return !participants.contains(player);
+        boolean found = false;
+
+        for (OfflinePlayer p : participants) {
+            if (p.getUniqueId().equals(player.getUniqueId())) {
+                found = true;
+                break;
+            }
+        }
+
+        return !found;
     }
 
     public void sendToOwner(String message) {
@@ -251,5 +261,9 @@ public class Auction {
             builder.append(hours).append("h ");
         builder.append(minutes).append("m ").append(seconds).append("s");
         return builder.toString();
+    }
+
+    public boolean isOwn(Player opener) {
+        return seller.getName().equalsIgnoreCase(opener.getName());
     }
 }

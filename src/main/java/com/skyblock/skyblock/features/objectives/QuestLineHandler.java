@@ -1,11 +1,14 @@
 package com.skyblock.skyblock.features.objectives;
 
 import com.skyblock.skyblock.SkyblockPlayer;
-import com.skyblock.skyblock.features.objectives.impl.hub.IntroduceYourselfQuest;
-import com.skyblock.skyblock.features.objectives.impl.hub.TimeToStrikeQuest;
-import com.skyblock.skyblock.features.objectives.impl.hub.auction.AuctioneerQuest;
-import com.skyblock.skyblock.features.objectives.impl.hub.TimberQuest;
-import com.skyblock.skyblock.features.objectives.impl.starting.GettingStartedQuest;
+import com.skyblock.skyblock.features.objectives.foraging.IntoTheWoodsQuest;
+import com.skyblock.skyblock.features.objectives.hub.IntroduceYourselfQuest;
+import com.skyblock.skyblock.features.objectives.hub.TimeToStrikeQuest;
+import com.skyblock.skyblock.features.objectives.hub.AuctioneerQuest;
+import com.skyblock.skyblock.features.objectives.foraging.TimberQuest;
+import com.skyblock.skyblock.features.objectives.mines.GoingDeeperQuest;
+import com.skyblock.skyblock.features.objectives.mines.LostAndFoundQuest;
+import com.skyblock.skyblock.features.objectives.starting.GettingStartedQuest;
 import lombok.Getter;
 
 import java.util.*;
@@ -19,8 +22,11 @@ public class QuestLineHandler {
         register("Private Island", new GettingStartedQuest());
         register("Village", new IntroduceYourselfQuest());
         register("Auction House", new AuctioneerQuest());
-        register("Forest", new TimberQuest());
-        register("Bar", new TimeToStrikeQuest());
+        register(new String[] { "Forest", "Birch Park" }, new TimberQuest());
+        register(new String[] { "Forest", "Birch Park", "Spruce Woods", "Dark Thicket", "Savanna Woodland", "Jungle Island" }, new IntoTheWoodsQuest());
+        register(new String[] { "Bar", "Graveyard", "Spiders Den" }, new TimeToStrikeQuest());
+        register("Gold Mine", new LostAndFoundQuest());
+        register(new String[] {"Gold Mine", "Deep Caverns", "Gunpowder Mines", "Lapis Quarry", "Pigman's Den", "Slimehill", "Diamond Reserve", "Obsidian Sanctuary"}, new GoingDeeperQuest());
 
         for (List<QuestLine> quest : quests.values()) {
             quest.forEach(QuestLine::onEnable);
@@ -33,11 +39,20 @@ public class QuestLineHandler {
         }
     }
 
+    public void register(String[] locations, QuestLine line) {
+        for (String loc : locations) {
+            register(loc, line);
+        }
+    }
+
     public void register(String location, QuestLine line) {
         if (quests.containsKey(location)) {
             quests.get(location).add(line);
         } else {
-            quests.put(location, Collections.singletonList(line));
+            ArrayList<QuestLine> list = new ArrayList<>();
+            list.add(line);
+
+            quests.put(location, list);
         }
     }
 
@@ -68,5 +83,18 @@ public class QuestLineHandler {
         }
 
         return null;
+    }
+
+    public List<QuestLine> getQuests() {
+        List<QuestLine> quests = new ArrayList<>();
+
+        for (List<QuestLine> questLines : this.quests.values()) {
+            for (QuestLine quest : questLines) {
+                if (quests.contains(quest)) continue;
+                quests.add(quest);
+            }
+        }
+
+        return quests;
     }
 }

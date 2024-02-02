@@ -56,7 +56,7 @@ public class SlayerScoreboard extends Scoreboard {
             purse.append(ChatColor.YELLOW + " (+" + Util.formatInt((int) skyblockPlayer.getExtraData("lastpicked_coins")) + ")");
         }
 
-        addLine(3, purse.toString());
+        addLine(7, purse.toString());
         addLine(6, ChatColor.WHITE + "   ");
         addLine(5, ChatColor.WHITE + "Slayer Quest");
 
@@ -80,6 +80,6 @@ public class SlayerScoreboard extends Scoreboard {
                 addLine(3, ChatColor.RED + "Quest failed!");
         }
         addLine(2, ChatColor.WHITE + "  ");
-        addLine(1, ChatColor.YELLOW + "original: www.hypixel.net");
+        addLine(1, ChatColor.YELLOW + "www.hypixel.net");
     }
 }

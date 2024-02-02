@@ -1,6 +1,7 @@
 package com.skyblock.skyblock.features.launchpads;
 
 import com.skyblock.skyblock.Skyblock;
+import com.skyblock.skyblock.SkyblockPlayer;
 import net.minecraft.server.v1_8_R3.EnumParticle;
 import net.minecraft.server.v1_8_R3.PacketPlayOutWorldParticles;
 import org.bukkit.Location;
@@ -39,7 +40,6 @@ public class LaunchPadHandler {
 
         for (String pad : pads) {
             Location from = (Location) getField(pad, "from");
-            from.setWorld(Skyblock.getSkyblockWorld());
             if (player.getWorld().equals(from.getWorld()) && player.getLocation().distance(from) < 2) return pad;
         }
 
@@ -72,10 +72,6 @@ public class LaunchPadHandler {
         Location front = (Location) getField(padName, "infront");
         Location teleport = (Location) getField(padName, "teleport");
 
-        to.setWorld(Skyblock.getSkyblockWorld());
-        front.setWorld(Skyblock.getSkyblockWorld());
-        teleport.setWorld(Skyblock.getSkyblockWorld());
-
         player.teleport(front);
 
         onLaunchpad.add(player);
@@ -105,12 +101,18 @@ public class LaunchPadHandler {
 
             public void run() {
                 if (to.distance(am.getLocation()) < 2.0 || this.xC > 200.0 || !onLaunchpad.contains(player)) {
-                    player.teleport(teleport);
-                    player.playSound(player.getLocation(), Sound.HORSE_ARMOR, 10, 2);
+                    new BukkitRunnable() {
+                        @Override
+                        public void run() {
+                            player.teleport(teleport);
+                            player.playSound(player.getLocation(), Sound.HORSE_ARMOR, 10, 2);
+                            SkyblockPlayer.getPlayer(player).setExtraData("lastSpawn", teleport);
+                        }
+                    }.runTask(Skyblock.getPlugin());
 
-                    cancel();
                     am.remove();
                     onLaunchpad.remove(player);
+                    cancel();
                 }
                 moveToward(am, yCalculate(this.a, this.b, this.c, this.xC), to);
                 this.xC += 0.84;
@@ -119,7 +121,6 @@ public class LaunchPadHandler {
     }
 
     private void moveToward(final Entity player, double yC, Location to) {
-        to.setWorld(Skyblock.getSkyblockWorld());
         final Location loc = player.getLocation();
         final double x = loc.getX() - to.getX();
         final double y = loc.getY() - to.getY() - (Math.max(yC, 0.0));

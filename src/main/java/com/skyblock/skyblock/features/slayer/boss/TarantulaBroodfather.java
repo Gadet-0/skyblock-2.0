@@ -1,6 +1,5 @@
 package com.skyblock.skyblock.features.slayer.boss;
 
-import com.skyblock.skyblock.Skyblock;
 import com.skyblock.skyblock.SkyblockPlayer;
 import com.skyblock.skyblock.features.entities.SkyblockEntity;
 import com.skyblock.skyblock.features.slayer.SlayerBoss;
@@ -30,13 +29,15 @@ public class TarantulaBroodfather extends SlayerBoss {
                 loadStats(750, 35, false, true, true, new Equipment(), "Tarantula Broodfather", 40, 50);
                 break;
             case 2:
-                loadStats(30000, 45, false, true, true, new Equipment(), "Tarantula Broodfather", 90, 100);
+                loadStats(30000, 110, false, true, true, new Equipment(), "Tarantula Broodfather", 90, 100);
                 break;
             case 3:
-                loadStats(900000, 155, false, true, true, new Equipment(), "Tarantula Broodfather", 180, 200);
+                loadStats(900000, 525, false, true, true, new Equipment(), "Tarantula Broodfather", 180, 200);
                 break;
             case 4:
-                loadStats(2400000, 400, false, true, true, new Equipment(), "Tarantula Broodfather", 260, 500);
+                loadStats(2400000, 1325, false, true, true, new Equipment(), "Tarantula Broodfather", 260, 500);
+                break;
+            default:
                 break;
         }
 

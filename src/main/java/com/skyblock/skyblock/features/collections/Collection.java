@@ -2,7 +2,7 @@ package com.skyblock.skyblock.features.collections;
 
 import com.skyblock.skyblock.Skyblock;
 import com.skyblock.skyblock.SkyblockPlayer;
-import com.skyblock.skyblock.features.collections.gui.CollectionRewardGUI;
+import com.skyblock.skyblock.events.SkyblockPlayerCollectionRewardEvent;
 import com.skyblock.skyblock.features.crafting.gui.CraftingGUI;
 import com.skyblock.skyblock.utilities.Constants;
 import com.skyblock.skyblock.utilities.Util;
@@ -10,6 +10,7 @@ import com.skyblock.skyblock.utilities.chat.ChatMessageBuilder;
 import de.tr7zw.nbtapi.NBTItem;
 import lombok.Getter;
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.WordUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -27,7 +28,10 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Objects;
 
 @Getter
 public class Collection {
@@ -99,6 +103,8 @@ public class Collection {
         if (skyblockPlayer.getValue("collection." + this.name.toLowerCase() + ".unlocked").equals(false)) {
             skyblockPlayer.setValue("collection." + this.name.toLowerCase() + ".unlocked", true);
 
+            skyblockPlayer.setValue("collection.unlocked", skyblockPlayer.getIntValue("collection.unlocked") + 1);
+
             player.sendMessage(ChatColor.GOLD + "" + ChatColor.BOLD + "  COLLECTION UNLOCKED " + ChatColor.YELLOW + this.name);
 
             player.playSound(player.getLocation(), Sound.LEVEL_UP, 1, 2);
@@ -114,11 +120,14 @@ public class Collection {
 
             builder
                     .add("&e&l" + Constants.COLLECTION_SEPERATOR)
-                    .add("&6&l  COLLECTION LEVEL UP &e" + StringUtils.capitalize(this.name.toLowerCase()) + " &8" + (level == 0 ? 0 : Util.toRoman(level)) + " ➜ &e" + Util.toRoman(level + 1))
+                    .add("&6&l  COLLECTION LEVEL UP &e" + WordUtils.capitalize(this.name.toLowerCase()) + " " + (level == 0 ? "" : "&8" + (Util.toRoman(level)) + " ➜ &e") + Util.toRoman(level + 1))
                     .add("")
                     .add("&a&l  REWARDS");
 
-            for (String s : this.rewards.stringify(level + 1)) builder.add(Util.buildLore("  " + s.replace("  \n", "    \n")));
+            for (String s : this.rewards.stringify(level + 1)) {
+                builder.add(Util.buildLore("  " + s.replace("  \n", "    \n")));
+                Bukkit.getPluginManager().callEvent(new SkyblockPlayerCollectionRewardEvent(skyblockPlayer, s.substring(4)));
+            }
 
             if (this.rewards.stringify(level + 1).size() == 0) builder.add("    &cComing soon");
 
@@ -157,11 +166,9 @@ public class Collection {
 
         File folder = new File(skyblock.getDataFolder() + File.separator + "collections");
 
-        if (!folder.exists()) {
-            if (!folder.mkdirs()) {
-                skyblock.sendMessage("&cFailed to initialize collections: could not create folder &8collections");
-                Collection.INITIALIZED = false;
-            }
+        if (!folder.exists() && !folder.mkdirs()) {
+            skyblock.sendMessage("&cFailed to initialize collections: could not create folder &8collections");
+            Collection.INITIALIZED = false;
         }
 
         for (File file : Objects.requireNonNull(folder.listFiles())) {

@@ -2,7 +2,7 @@ package com.skyblock.skyblock.features.crafting.gui;
 
 import com.skyblock.skyblock.Skyblock;
 import com.skyblock.skyblock.SkyblockPlayer;
-import com.skyblock.skyblock.event.SkyblockCraftEvent;
+import com.skyblock.skyblock.events.SkyblockPlayerCraftEvent;
 import com.skyblock.skyblock.features.crafting.RecipeHandler;
 import com.skyblock.skyblock.features.crafting.SkyblockRecipe;
 import com.skyblock.skyblock.utilities.Util;
@@ -56,13 +56,13 @@ public class CraftingGUI extends CraftInventoryCustom implements Listener {
             }
         };
 
-        task.runTaskTimer(Skyblock.getPlugin(Skyblock.class), 5L, 1);
+        task.runTaskTimer(Skyblock.getPlugin(), 5L, 1);
 
-        Bukkit.getPluginManager().registerEvents(this, Skyblock.getPlugin(Skyblock.class));
+        Bukkit.getPluginManager().registerEvents(this, Skyblock.getPlugin());
     }
 
     private void tick() {
-        RecipeHandler handler = Skyblock.getPlugin(Skyblock.class).getRecipeHandler();
+        RecipeHandler handler = Skyblock.getPlugin().getRecipeHandler();
         StringBuilder string = new StringBuilder("[");
         StringBuilder ignoreAmount = new StringBuilder("[");
 
@@ -84,8 +84,8 @@ public class CraftingGUI extends CraftInventoryCustom implements Listener {
                     ItemStack one = new ItemStack(item);
                     one.setAmount(1);
 
-                    string.append(Skyblock.getPlugin(Skyblock.class).getItemHandler().getReversed().get(one)).append(":").append(item.getAmount()).append(":0");
-                    ignoreAmount.append(Skyblock.getPlugin(Skyblock.class).getItemHandler().getReversed().get(one)).append(":0");
+                    string.append(nbtItem.getString("skyblockId").toUpperCase()).append(":").append(item.getAmount()).append(":0");
+                    ignoreAmount.append(nbtItem.getString("skyblockId").toUpperCase()).append(":0");
                 } else {
                     string.append(item.getType().name()).append(":").append(item.getAmount()).append(":").append(item.getDurability());
                     ignoreAmount.append(item.getType().name()).append(":").append(item.getDurability());
@@ -159,10 +159,10 @@ public class CraftingGUI extends CraftInventoryCustom implements Listener {
 
         if (event.getSlot() != 23 || event.getCurrentItem().getType().equals(Material.BARRIER)) return;
 
-        event.getWhoClicked().getInventory().addItem(event.getCurrentItem());
+        event.getWhoClicked().getInventory().addItem(Skyblock.getPlugin().getItemHandler().getItem(event.getCurrentItem()));
         setItem(23, recipeRequired);
 
-        Bukkit.getPluginManager().callEvent(new SkyblockCraftEvent(recipe, (Player) event.getWhoClicked()));
+        Bukkit.getPluginManager().callEvent(new SkyblockPlayerCraftEvent(recipe, (Player) event.getWhoClicked()));
 
         for (int i = 0; i < slots.size(); i++) {
             if (excess != null && excess.get(i) == 0 && getItem(slots.get(i)) == null) {
@@ -176,12 +176,22 @@ public class CraftingGUI extends CraftInventoryCustom implements Listener {
             }
         }
 
+        tick();
+
         event.setCancelled(true);
     }
 
     @EventHandler
     public void onClose(InventoryCloseEvent event) {
         if (!event.getInventory().equals(this)) return;
+
+        for (int slot : slots) {
+            ItemStack item = getItem(slot);
+
+            if (item != null) {
+                event.getPlayer().getInventory().addItem(item);
+            }
+        }
 
         task.cancel();
         HandlerList.unregisterAll(this);

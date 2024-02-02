@@ -35,7 +35,7 @@ public class AuctionBrowserGUI extends Gui {
                 new AuctionBrowserGUI(player, page, search).show(player);
             });
 
-            put(ChatColor.GREEN + "Item Teir", () -> {
+            put(ChatColor.GREEN + "Item Tier", () -> {
                 settings.incrementRarity();
                 new AuctionBrowserGUI(player, page, search).show(player);
             });
@@ -122,15 +122,15 @@ public class AuctionBrowserGUI extends Gui {
             AuctionCategory category = settings.getCategory();
             AuctionSettings.AuctionSort sort = settings.getSort();
             AuctionSettings.BinFilter bin = settings.getBinFilter();
-            Rarity teir = settings.getTeir();
+            Rarity tier = settings.getTier();
 
             int j = 0;
             for (int i = 0; i < 54; i++) {
-                if (j == ah.getAuctions(category, sort, bin, teir, page, search, true).size()) break;
+                if (j == ah.getAuctions(category, sort, bin, tier, page, search, true).size()) break;
 
-                Auction auction = ah.getAuctions(category, sort, bin, teir, page, search, true).get(j);
+                Auction auction = ah.getAuctions(category, sort, bin, tier, page, search, true).get(j);
 
-                put(auction.getDisplayItem(false, auction.getSeller().equals(player)), () -> {
+                put(auction.getDisplayItem(false, auction.isOwn(player)), () -> {
                     new AuctionInspectGUI(auction, player).show(player);
                 });
 
@@ -138,22 +138,22 @@ public class AuctionBrowserGUI extends Gui {
             }
         }});
 
-        Util.fillBorder(this);
-
         AuctionHouse ah = Skyblock.getPlugin().getAuctionHouse();
         AuctionSettings settings = SkyblockPlayer.getPlayer(player).getAuctionSettings();
 
         AuctionCategory category = settings.getCategory();
         AuctionSettings.AuctionSort sort = settings.getSort();
         AuctionSettings.BinFilter bin = settings.getBinFilter();
-        Rarity teir = settings.getTeir();
+        Rarity tier = settings.getTier();
+
+        Util.fillBorder(this, Material.STAINED_GLASS_PANE, category.getColor());
 
         List<String> sortList = new ArrayList<>(Arrays.asList("Highest Bid", "Lowest Bid", "Ending soon", "Most Bids"));
         List<String> rarityList = new ArrayList<>();
 
         rarityList.add("No filter");
         rarityList.addAll(Arrays.asList(Rarity.stringValues()));
-        if (teir == null) {
+        if (tier == null) {
             rarityList.set(0, ChatColor.DARK_GRAY + "No filter");
 
             rarityList.forEach((r) -> {
@@ -163,7 +163,7 @@ public class AuctionBrowserGUI extends Gui {
             });
         } else {
             rarityList.forEach((r) -> {
-                if (WordUtils.capitalize(teir.name().toLowerCase().replace("_", " ")).equals(ChatColor.stripColor(r))) {
+                if (WordUtils.capitalize(tier.name().toLowerCase().replace("_", " ")).equals(ChatColor.stripColor(r))) {
                     rarityList.set(rarityList.indexOf(r), r);
                 } else {
                     rarityList.set(rarityList.indexOf(r), ChatColor.GRAY + ChatColor.stripColor(r));
@@ -199,7 +199,7 @@ public class AuctionBrowserGUI extends Gui {
             }
         });
 
-        int maxPage = ((int) Math.ceil(ah.getAuctions(category, sort, bin, teir, -1, search, true).size() / 24F)) + 1;
+        int maxPage = ((int) Math.ceil(ah.getAuctions(category, sort, bin, tier, -1, search, true).size() / 24F));
 
         addItem(0, AuctionCategory.WEAPON.getDisplay());
         addItem(9, AuctionCategory.ARMOR.getDisplay());
@@ -207,16 +207,16 @@ public class AuctionBrowserGUI extends Gui {
         addItem(27, AuctionCategory.CONSUMABLES.getDisplay());
         addItem(36, AuctionCategory.BLOCKS.getDisplay());
         addItem(45, AuctionCategory.MISC.getDisplay());
-        addItem(46, new ItemBuilder(" ", Material.STAINED_GLASS_PANE, (short) 15).toItemStack());
-        addItem(47, new ItemBuilder(" ", Material.STAINED_GLASS_PANE, (short) 15).toItemStack());
-        addItem(10, new ItemBuilder(" ", Material.STAINED_GLASS_PANE, (short) 15).toItemStack());
-        addItem(19, new ItemBuilder(" ", Material.STAINED_GLASS_PANE, (short) 15).toItemStack());
-        addItem(28, new ItemBuilder(" ", Material.STAINED_GLASS_PANE, (short) 15).toItemStack());
-        addItem(37, new ItemBuilder(" ", Material.STAINED_GLASS_PANE, (short) 15).toItemStack());
+        addItem(46, new ItemBuilder(" ", Material.STAINED_GLASS_PANE, category.getColor()).toItemStack());
+        addItem(47, new ItemBuilder(" ", Material.STAINED_GLASS_PANE, category.getColor()).toItemStack());
+        addItem(10, new ItemBuilder(" ", Material.STAINED_GLASS_PANE, category.getColor()).toItemStack());
+        addItem(19, new ItemBuilder(" ", Material.STAINED_GLASS_PANE, category.getColor()).toItemStack());
+        addItem(28, new ItemBuilder(" ", Material.STAINED_GLASS_PANE, category.getColor()).toItemStack());
+        addItem(37, new ItemBuilder(" ", Material.STAINED_GLASS_PANE, category.getColor()).toItemStack());
         addItem(48, new ItemBuilder(ChatColor.GREEN + "Search", Material.SIGN).addLore("&7Find items by name, type, lore", "&7or enchants.", " ", ChatColor.YELLOW + "Click to search").toItemStack());
         addItem(49, Util.buildBackButton("&7To Auction House"));
         addItem(50, new ItemBuilder(ChatColor.GREEN + "Sort", Material.HOPPER).addLore(" ").addLore(sortList).addLore(" ", ChatColor.YELLOW + "Click to switch!").toItemStack());
-        addItem(51, new ItemBuilder(ChatColor.GREEN + "Item Teir", Material.EYE_OF_ENDER).addLore(" ").addLore(rarityList).addLore(" ", ChatColor.YELLOW + "Click to switch rarity").toItemStack());
+        addItem(51, new ItemBuilder(ChatColor.GREEN + "Item Tier", Material.EYE_OF_ENDER).addLore(" ").addLore(rarityList).addLore(" ", ChatColor.YELLOW + "Click to switch rarity").toItemStack());
         addItem(52, new ItemBuilder(ChatColor.YELLOW + "BIN Filter", filterMaterials.get(bin)).addLore(" ").addLore(binFilter).addLore(" ", ChatColor.YELLOW + "Click to switch!").toItemStack());
         if (maxPage != page) addItem(53, new ItemBuilder(ChatColor.GREEN + "Next Page", Material.ARROW).addLore("&7(" + page + "/" + maxPage + ")", " ", ChatColor.AQUA + "Right-click to skip", ChatColor.YELLOW + "Click to turn page").toItemStack());
         if (page != 1) addItem(46, new ItemBuilder(ChatColor.GREEN + "Previous Page", Material.ARROW).addLore("&7(" + page + "/" + maxPage + ")", " ", ChatColor.AQUA + "Right-click to skip", ChatColor.YELLOW + "Click to turn page").toItemStack());
@@ -225,11 +225,11 @@ public class AuctionBrowserGUI extends Gui {
         for (int i = 0; i < 54; i++) {
             if (getItems().containsKey(i)) continue;
 
-            if (j == getAuctions(category, sort, bin, teir, page, search).size()) break;
+            if (j == getAuctions(category, sort, bin, tier, page, search).size()) break;
 
-            Auction auction = getAuctions(category, sort, bin, teir, page, search).get(j);
+            Auction auction = getAuctions(category, sort, bin, tier, page, search).get(j);
 
-            addItem(i, auction.getDisplayItem(false, player.equals(auction.getSeller())));
+            addItem(i, auction.getDisplayItem(false, auction.isOwn(player)));
             j++;
         }
     }

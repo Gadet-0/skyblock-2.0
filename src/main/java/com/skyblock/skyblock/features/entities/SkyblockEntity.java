@@ -3,19 +3,21 @@ package com.skyblock.skyblock.features.entities;
 import com.skyblock.skyblock.Skyblock;
 import com.skyblock.skyblock.SkyblockPlayer;
 import com.skyblock.skyblock.enums.SkyblockStat;
-import com.skyblock.skyblock.event.SkyblockEntityDeathEvent;
+import com.skyblock.skyblock.events.SkyblockEntityDeathEvent;
 import com.skyblock.skyblock.features.skills.Skill;
 import com.skyblock.skyblock.utilities.Util;
-import com.skyblock.skyblock.utilities.item.ItemBase;
 import com.skyblock.skyblock.utilities.item.ItemHandler;
-import de.tr7zw.nbtapi.NBTItem;
 import lombok.Getter;
 import lombok.Setter;
+import net.minecraft.server.v1_8_R3.*;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Sound;
+import org.bukkit.craftbukkit.v1_8_R3.entity.CraftEntity;
+import org.bukkit.craftbukkit.v1_8_R3.entity.CraftPlayer;
 import org.bukkit.entity.*;
+import org.bukkit.entity.Entity;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.metadata.FixedMetadataValue;
@@ -30,6 +32,7 @@ import java.util.List;
 public abstract class SkyblockEntity {
 
     protected static final ItemHandler handler = Skyblock.getPlugin().getItemHandler();
+    protected static final SkyblockEntityHandler entityHandler = Skyblock.getPlugin().getEntityHandler();
     private Entity vanilla;
     private final EntityType entityType;
     @Setter
@@ -40,7 +43,8 @@ public abstract class SkyblockEntity {
     protected int lifeSpan;
     @Setter
     private SkyblockPlayer lastDamager;
-    private List<Player> damaged;
+    private final List<Player> damaged;
+    private EntityNameTag nameTag;
 
     public static class Equipment {
         public ItemStack hand;
@@ -129,19 +133,26 @@ public abstract class SkyblockEntity {
                 ((Enderman) vanilla).setCarriedMaterial(getEntityData().hand.getData());
             }
 
-            plugin.getEntityHandler().registerEntity(this);
+            entityHandler.registerEntity(this);
+
+            nameTag = new EntityNameTag(this);
 
             new BukkitRunnable() {
                 @Override
                 public void run() {
                     if (vanilla.isDead()){
+                        entityHandler.unregisterEntity(vanilla.getEntityId());
+
                         onDeath();
                         cancel();
-                        plugin.getEntityHandler().unregisterEntity(vanilla.getEntityId());
-                    }else{
-                        vanilla.setCustomNameVisible(true);
-                        vanilla.setCustomName(ChatColor.DARK_GRAY + "[" + ChatColor.GRAY + "Lv" + getEntityData().level + ChatColor.DARK_GRAY + "] " + ChatColor.RED + getEntityData().entityName + " " + ChatColor.GREEN + (getEntityData().health) + ChatColor.DARK_GRAY + "/" + ChatColor.GREEN + (getEntityData().maximumHealth) + ChatColor.RED + "❤");
-                        ((LivingEntity) vanilla).addPotionEffect(new PotionEffect(PotionEffectType.DAMAGE_RESISTANCE, Integer.MAX_VALUE, 5, true, false));
+                    } else {
+                        String name = ChatColor.DARK_GRAY + "[" + ChatColor.GRAY + "Lv" + getEntityData().level + ChatColor.DARK_GRAY + "] " + ChatColor.RED + getEntityData().entityName + " " + ChatColor.GREEN + Math.max(0, getEntityData().health) + ChatColor.DARK_GRAY + "/" + ChatColor.GREEN + (getEntityData().maximumHealth) + ChatColor.RED + "❤";
+
+                        nameTag.tick(name);
+
+                        if (!(vanilla instanceof LivingEntity)) return;
+
+                        living.addPotionEffect(new PotionEffect(PotionEffectType.DAMAGE_RESISTANCE, Integer.MAX_VALUE, 5, true, false));
 
                         if (getEntityData().health <= 0) {
                             if (getLastDamager() != null) {
@@ -150,25 +161,30 @@ public abstract class SkyblockEntity {
                                 Skill.reward(getEntityData().skill, getEntityData().xp, getLastDamager());
                             }
 
-                            vanilla.setCustomName(ChatColor.DARK_GRAY + "[" + ChatColor.GRAY + "Lv" + getEntityData().level + ChatColor.DARK_GRAY + "] " + ChatColor.RED + getEntityData().entityName + " " + ChatColor.GREEN + (0) + ChatColor.DARK_GRAY + "/" + ChatColor.GREEN + (getEntityData().maximumHealth) + ChatColor.RED + "❤");
-                            plugin.getEntityHandler().unregisterEntity(vanilla.getEntityId());
                             living.setHealth(0);
                         }
 
                         if (getEntityData().isHostile && living instanceof Monster) {
-                            for (Entity entity : getVanilla().getNearbyEntities(5, 2, 5)){
-                                if (entity instanceof Player) {
-                                    ((Monster) living).setTarget((LivingEntity) entity);
-                                }
-                            }
+                            Monster monster = (Monster) living;
 
-                            if (((Monster) living).getTarget() != null) lifeSpan += 15 * 20;
+                            if (monster.getTarget() != null && monster.getTarget().getLocation().distance(monster.getLocation()) > 10) {
+                                monster.setTarget(null);
+
+                                for (Entity entity : getVanilla().getNearbyEntities(5, 2, 5)){
+                                    if (entity instanceof Player && !entity.hasMetadata("NPC")) {
+                                        monster.setTarget((LivingEntity) entity);
+                                    }
+                                }
+
+                                if (((Monster) living).getTarget() != null) lifeSpan += 15 * 20;
+                            }
                         }
 
                         lifeSpan--;
 
                         if (lifeSpan < 0) {
-                            plugin.getEntityHandler().unregisterEntity(vanilla.getEntityId());
+                            nameTag.death();
+                            entityHandler.unregisterEntity(vanilla.getEntityId());
                             vanilla.remove();
                             onDespawn();
                             onDeath();
@@ -176,6 +192,7 @@ public abstract class SkyblockEntity {
                         }
 
                         tick();
+
                         tick++;
                     }
                 }
@@ -195,12 +212,15 @@ public abstract class SkyblockEntity {
     public List<EntityDrop> getDrops() {
         return new ArrayList<>();
     }
+    public List<EntityDrop> getRareDrops() { return new ArrayList<>(); }
 
     protected void tick() {}
 
     protected void onDeath() {
+        nameTag.death();
+
         if (getLastDamager() != null) {
-            boolean rare = false;
+            boolean foundRareDrop = false;
 
             SkyblockPlayer lastDamager = getLastDamager();
             boolean hasTelekinesis = lastDamager.hasTelekinesis();
@@ -211,21 +231,23 @@ public abstract class SkyblockEntity {
 
             if (!getDropId().equals("") && drops.isEmpty()) drops = Skyblock.getPlugin().getEntityHandler().getMobDropHandler().getDrops(getDropId());
 
+            drops.addAll(getRareDrops());
+
+            Util.shuffle(drops);
+
             for (EntityDrop drop : drops) {
                 EntityDropRarity type = drop.getRarity();
-                double r = Util.random(0.0, 1.0);
-                double magicFind = getLastDamager().getStat(SkyblockStat.MAGIC_FIND) / 100.0;
+                double r = Util.random(0.0, 100);
+                double magicFind = getLastDamager().getStat(SkyblockStat.MAGIC_FIND);
                 double c = drop.getChance() + magicFind;
                 if (r > c) continue;
-                if (rare && type != EntityDropRarity.GUARANTEED) continue;
+                if (foundRareDrop && type != EntityDropRarity.COMMON) continue;
                 ItemStack stack = Util.toSkyblockItem(drop.getItem());
                 stack.setAmount((int) Util.random(drop.getMin(), drop.getMax()));
 
-                if (type != EntityDropRarity.GUARANTEED && type != EntityDropRarity.COMMON && getLastDamager() != null) {
-                    getLastDamager().getBukkitPlayer().sendMessage(type.getColor() + "" + ChatColor.BOLD +
-                            (type == EntityDropRarity.CRAZY_RARE ? "CRAZY " : "") + "RARE DROP!  " +
-                            ChatColor.GRAY + "(" + stack.getItemMeta().getDisplayName() + ChatColor.GRAY + ")" + (magicFind != 0.0 ? ChatColor.AQUA +
-                            " (+" + (int) (magicFind * 10000) + "% Magic Find!)" : ""));
+                if (type != EntityDropRarity.COMMON && getLastDamager() != null) {
+                    getLastDamager().getBukkitPlayer().playSound(getLastDamager().getBukkitPlayer().getLocation(), Sound.NOTE_PLING, 10, 2);
+                    getLastDamager().getBukkitPlayer().sendMessage(ChatColor.GOLD.toString() + ChatColor.BOLD + "RARE DROP " + drop.getItem().getItemMeta().getDisplayName() + (magicFind > 0 ? " " + ChatColor.AQUA + "(" + magicFind + "% Magic Find)" : ""));
                 }
 
                 if (!hasTelekinesis) getLastDamager().dropItem(stack, getVanilla().getLocation());
@@ -237,7 +259,7 @@ public abstract class SkyblockEntity {
                     }
                 }
 
-                if (type != EntityDropRarity.GUARANTEED) rare = true;
+                if (type != EntityDropRarity.COMMON) foundRareDrop = true;
             }
 
             if (getEntityData().orbs > 0) {
@@ -276,10 +298,22 @@ public abstract class SkyblockEntity {
     }
 
     public void damage(long damage, SkyblockPlayer damager, boolean crit) {
+        damage(damage, damager, crit, ChatColor.GRAY);
+    }
+
+    public void damage(long damage, SkyblockPlayer damager, boolean crit, ChatColor colorOverride) {
+        if (getVanilla().isDead()) return;
+
         this.subtractHealth(damage);
         this.setLastDamager(damager);
 
-        Util.setDamageIndicator(this.vanilla.getLocation(), crit ? Util.addCritTexture(Math.round(damage)) : ChatColor.GRAY + "" + Util.formatLong(damage), false);
+        if (getVanilla() instanceof LivingEntity) {
+            PacketPlayOutEntityStatus packet = new PacketPlayOutEntityStatus(((CraftEntity) getVanilla()).getHandle(), (byte) 2);
+
+            Bukkit.getOnlinePlayers().forEach((p) -> ((CraftPlayer) p).getHandle().playerConnection.sendPacket(packet));
+        }
+
+        Util.setDamageIndicator(this.vanilla.getLocation(), crit ? Util.addCritTexture(Math.round(damage)) : colorOverride + "" + Util.formatLong(damage), false);
     }
 
     public void onDespawn() { }

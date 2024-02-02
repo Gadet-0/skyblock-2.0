@@ -3,10 +3,12 @@ package com.skyblock.skyblock.features.pets;
 import com.skyblock.skyblock.SkyblockPlayer;
 import com.skyblock.skyblock.enums.Rarity;
 import com.skyblock.skyblock.enums.SkyblockStat;
+import com.skyblock.skyblock.events.SkyblockPlayerDamageEntityEvent;
 import com.skyblock.skyblock.features.skills.Skill;
 import com.skyblock.skyblock.utilities.Util;
 import de.tr7zw.nbtapi.NBTItem;
 import lombok.Data;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.SkullType;
@@ -185,7 +187,7 @@ public abstract class Pet {
         addIntLore("Ferocity", getPerFerocity() + getBaseFerocity() / level, lore, level);
         addIntLore("Strength", getPerStrength() + getBaseStrength() / level, lore, level);
         addIntLore("Defense", getPerDefense() + getBaseDefense() / level, lore, level);
-        addPercentLore("Speed", getPerSpeed() + getBaseSpeed() / level, lore, level);
+        addIntLore("Speed", getPerSpeed() + getBaseSpeed() / level, lore, level);
         addIntLore("Intelligence", getPerIntelligence() + getBaseIntelligence() / level, lore, level);
 
         for (PetAbility ability : getAbilities(level)) {
@@ -201,8 +203,8 @@ public abstract class Pet {
 
         if (level != 100) {
             int next = level + 1;
-            double progress = xp - getXP(level, rarity);
-            int goal = (int) (getXP(next, rarity) - getXP(level, rarity));
+            double progress = xp;
+            int goal = (int) (getXP(level, rarity));
 
             double percent = (progress / goal) * 100.0;
 
@@ -347,7 +349,7 @@ public abstract class Pet {
         }
     }
 
-    public void onDamage(EntityDamageByEntityEvent e) {
+    public void onDamage(SkyblockPlayerDamageEntityEvent e) {
         for (PetAbility ability : getAbilities(getLevel())) {
             try {
                 ability.onDamage(e);

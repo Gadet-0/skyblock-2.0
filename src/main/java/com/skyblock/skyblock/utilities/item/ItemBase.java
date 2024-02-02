@@ -7,8 +7,10 @@ import com.skyblock.skyblock.enums.Reforge;
 import com.skyblock.skyblock.enums.SkyblockStat;
 import com.skyblock.skyblock.features.enchantment.ItemEnchantment;
 import com.skyblock.skyblock.features.enchantment.SkyblockEnchantment;
+import com.skyblock.skyblock.features.enchantment.SkyblockEnchantmentHandler;
 import com.skyblock.skyblock.features.enchantment.enchantments.sword.CriticalEnchantment;
 import com.skyblock.skyblock.features.items.SkyblockItemHandler;
+import com.skyblock.skyblock.features.reforge.ReforgeData;
 import com.skyblock.skyblock.features.reforge.ReforgeStat;
 import com.skyblock.skyblock.utilities.Util;
 import de.tr7zw.nbtapi.NBTItem;
@@ -16,7 +18,6 @@ import lombok.Getter;
 import lombok.Setter;
 import net.minecraft.server.v1_8_R3.NBTTagCompound;
 import org.apache.commons.lang.StringUtils;
-import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
@@ -43,6 +44,9 @@ public class ItemBase {
 
     private boolean reforgeable;
     private Reforge reforge;
+
+    private boolean appliedCritical;
+    private boolean isThick;
 
     private List<ItemEnchantment> enchantments;
     private boolean enchantGlint;
@@ -93,6 +97,8 @@ public class ItemBase {
         }
 
         this.reforgeable = nbt.getBoolean("reforgeable");
+        this.appliedCritical = nbt.getBoolean("appliedCritical");
+        this.isThick = nbt.getBoolean("isThick");
         this.enchantments = new ArrayList<>();
         String enchantmentsStr = nbt.getString("enchantments");
 
@@ -107,29 +113,40 @@ public class ItemBase {
         }
         this.enchantGlint = nbt.getBoolean("enchantGlint");
         String abilityDescriptionStr = nbt.getString("abilityDescription");
-        this.abilityDescription = Arrays.asList(abilityDescriptionStr.substring(1, abilityDescriptionStr.length() - 1).split("; "));
-        this.abilityCooldown = nbt.getString("abilityCooldown");
-        this.abilityName = nbt.getString("abilityName");
-        this.abilityType = nbt.getString("abilityType");
         this.hasAbility = nbt.getBoolean("hasAbility");
-        this.abilityCost = nbt.getInteger("abilityCost");
-        this.intelligence = nbt.getInteger("intelligence");
-        this.attackSpeed = nbt.getInteger("attackSpeed");
-        this.critChance = nbt.getInteger("critChance");
-        this.critDamage = nbt.getInteger("critDamage");
-        this.strength = nbt.getInteger("strength");
-        this.defense = nbt.getInteger("defense");
-        this.damage = nbt.getInteger("damage");
-        this.health = nbt.getInteger("health");
-        this.speed = nbt.getInteger("speed");
+        if (hasAbility) {
+            this.abilityDescription = Arrays.asList(abilityDescriptionStr.substring(1, abilityDescriptionStr.length() - 1).split("; "));
+            this.abilityCooldown = nbt.getString("abilityCooldown");
+            this.abilityName = nbt.getString("abilityName");
+            this.abilityType = nbt.getString("abilityType");
+            this.abilityCost = nbt.getInteger("abilityCost");
+        }
+
+        ReforgeStat stats = reforge.getReforgeData(rarityEnum);
+
+        if (stats == null) stats = new ReforgeStat(rarityEnum, new HashMap<>(), new ReforgeData(null, null, null));
+
+        this.intelligence = nbt.getInteger("intelligence") - stats.get(SkyblockStat.MANA);
+        this.attackSpeed = nbt.getInteger("attackSpeed") - stats.get(SkyblockStat.ATTACK_SPEED);
+        this.critChance = nbt.getInteger("critChance") - stats.get(SkyblockStat.CRIT_CHANCE);
+        this.critDamage = nbt.getInteger("critDamage") - stats.get(SkyblockStat.CRIT_DAMAGE);
+        this.strength = nbt.getInteger("strength") - stats.get(SkyblockStat.STRENGTH);
+        this.defense = nbt.getInteger("defense") - stats.get(SkyblockStat.DEFENSE);
+        this.damage = nbt.getInteger("damage") - stats.get(SkyblockStat.DAMAGE);
+        this.health = nbt.getInteger("health") - stats.get(SkyblockStat.HEALTH);
+        this.speed = nbt.getInteger("speed") - stats.get(SkyblockStat.SPEED);
         this.skyblockId = nbt.getString("skyblockId");
         this.item = this.getItem(rarity);
 
         String descriptionStr = nbt.getString("description");
-        String[] descriptionArr = descriptionStr.substring(1, descriptionStr.length() - 1).split("; ");
-        String[] descriptionArrClone = Arrays.copyOf(descriptionArr, descriptionArr.length + 1);
-        descriptionArrClone[descriptionArrClone.length - 1] = "";
-        this.description = Arrays.asList(descriptionArrClone);
+        if (descriptionStr.length() > 0) {
+            String[] descriptionArr = descriptionStr.substring(1, descriptionStr.length() - 1).split("; ");
+            String[] descriptionArrClone = Arrays.copyOf(descriptionArr, descriptionArr.length + 1);
+            descriptionArrClone[descriptionArrClone.length - 1] = "";
+            this.description = Arrays.asList(descriptionArrClone);
+        } else {
+            this.description = new ArrayList<>();
+        }
 
         this.stack = item;
         this.orig = item;
@@ -138,11 +155,11 @@ public class ItemBase {
     }
 
     public ItemBase(Material material, String name, Reforge reforgeType, int amount, List<String> description, List<ItemEnchantment> enchantments, boolean enchantGlint, boolean hasAbility, String abilityName, List<String> abilityDescription, String abilityType, int abilityCost, String abilityCooldown, String rarity, String skyblockId, int damage, int strength, int health, int critChance, int critDamage, int attackSpeed, int intelligence, int speed, int defense, boolean reforgeable) {
-        this(new ItemStack(material, amount), material, name, reforgeType, amount, description, enchantments, enchantGlint, hasAbility, abilityName, abilityDescription, abilityType, abilityCost, abilityCooldown, rarity, skyblockId, damage, strength, health, critChance, critDamage, attackSpeed, intelligence, speed, defense, reforgeable);
+        this(material, name, reforgeType, false, amount, description, enchantments, enchantGlint, hasAbility, abilityName, abilityDescription, abilityType, abilityCost, abilityCooldown, rarity, skyblockId, damage, strength, health, critChance, critDamage, attackSpeed, intelligence, speed, defense, reforgeable);
     }
 
-    public ItemBase(Material material, String name, Reforge reforgeType, int amount, List<String> description, List<ItemEnchantment> enchantments, boolean enchantGlint, boolean hasAbility, String abilityName, List<String> abilityDescription, String abilityType, int abilityCost, String abilityCooldown, String rarity, String skyblockId, int damage, int strength, int health, int critChance, int critDamage, int attackSpeed, int intelligence, int speed, int defense, boolean reforgeable, HashMap<String, Object> nbt, Function<ItemBase, ItemBase> after) {
-        this(new ItemStack(material, amount), material, name, reforgeType, amount, description, enchantments, enchantGlint, hasAbility, abilityName, abilityDescription, abilityType, abilityCost, abilityCooldown, rarity, skyblockId, damage, strength, health, critChance, critDamage, attackSpeed, intelligence, speed, defense, reforgeable);
+    public ItemBase(Material material, String name, Reforge reforgeType, boolean isThick, int amount, List<String> description, List<ItemEnchantment> enchantments, boolean enchantGlint, boolean hasAbility, String abilityName, List<String> abilityDescription, String abilityType, int abilityCost, String abilityCooldown, String rarity, String skyblockId, int damage, int strength, int health, int critChance, int critDamage, int attackSpeed, int intelligence, int speed, int defense, boolean reforgeable, HashMap<String, Object> nbt, Function<ItemBase, ItemBase> after) {
+        this(material, name, reforgeType, isThick, amount, description, enchantments, enchantGlint, hasAbility, abilityName, abilityDescription, abilityType, abilityCost, abilityCooldown, rarity, skyblockId, damage, strength, health, critChance, critDamage, attackSpeed, intelligence, speed, defense, reforgeable);
 
         NBTItem nbtItem = new NBTItem(this.stack);
 
@@ -160,7 +177,7 @@ public class ItemBase {
         this.regenerate();
     }
 
-    public ItemBase(ItemStack orig, Material material, String name, Reforge reforgeType, int amount, List<String> description, List<ItemEnchantment> enchantments, boolean enchantGlint, boolean hasAbility, String abilityName, List<String> abilityDescription, String abilityType, int abilityCost, String abilityCooldown, String rarity, String skyblockId, int damage, int strength, int health, int critChance, int critDamage, int attackSpeed, int intelligence, int speed, int defense, boolean reforgeable) {
+    public ItemBase(Material material, String name, Reforge reforgeType, boolean isThick, int amount, List<String> description, List<ItemEnchantment> enchantments, boolean enchantGlint, boolean hasAbility, String abilityName, List<String> abilityDescription, String abilityType, int abilityCost, String abilityCooldown, String rarity, String skyblockId, int damage, int strength, int health, int critChance, int critDamage, int attackSpeed, int intelligence, int speed, int defense, boolean reforgeable) {
         this.description = description;
         this.material = material;
         this.name = name;
@@ -169,6 +186,9 @@ public class ItemBase {
 
         this.reforge = reforgeType;
         this.reforgeable = reforgeable;
+
+        this.appliedCritical = false;
+        this.isThick = isThick;
 
         this.enchantments = enchantments;
         this.enchantGlint = enchantGlint;
@@ -219,15 +239,20 @@ public class ItemBase {
         int rDefense = reforgeData.get(SkyblockStat.DEFENSE);
         int rHealth = reforgeData.get(SkyblockStat.HEALTH);
 
-        if (this.getEnchantment("critical") != null && this.hasEnchantment(this.getEnchantment("critical").getBaseEnchantment()))
-            rCritDamage += CriticalEnchantment.getCritDamageIncrease.apply(this.getEnchantment("critical").getLevel());
+        if (this.getEnchantment("critical") != null && this.hasEnchantment(this.getEnchantment("critical").getBaseEnchantment())
+                && !this.appliedCritical
+        ) {
+            damage += CriticalEnchantment.getCritDamageIncrease.apply(this.getEnchantment("critical").getLevel());
+
+            this.appliedCritical = true;
+        }
 
         /*
           Stats
          */
         if (damage != 0) lore.add(ChatColor.GRAY + "Damage: " + ChatColor.RED + "+" + damage);
         if (strength != 0 || rStrength > 0)
-            lore.add(ChatColor.GRAY + "Strength: " + ChatColor.RED + "+" + (strength + rStrength) + (reforge != Reforge.NONE && rStrength > 0 ? " " + ChatColor.BLUE + "(+" + rStrength + ")" : ""));
+            lore.add(ChatColor.GRAY + "Strength: " + ChatColor.RED + "+" + (strength + rStrength) + ((reforge != Reforge.NONE && rStrength > 0) || isThick ? " " + ChatColor.BLUE + "(+" + rStrength + (isThick ? 100 : 0) + ")" : ""));
         if (critChance != 0 || rCritChance > 0)
             lore.add(ChatColor.GRAY + "Crit Chance: " + ChatColor.RED + "+" + (critChance + rCritChance) + "%" + (reforge != Reforge.NONE && rCritChance > 0 ? " " + ChatColor.BLUE + "(+" + rCritChance + "%)" : ""));
         if (critDamage != 0 || rCritDamage > 0)
@@ -254,7 +279,7 @@ public class ItemBase {
             lore.add(ChatColor.GRAY + "Intelligence: " + ChatColor.GREEN + "+" + (intelligence + rMana) + (reforge != Reforge.NONE && rMana > 0 ? " " + ChatColor.BLUE + "(+" + rMana + ")" : ""));
         }
 
-        if (description.size() != 0) lore.add("");
+        if (description.size() != 0 && !lore.isEmpty()) lore.add("");
 
         /*
         Enchantments
@@ -305,6 +330,8 @@ public class ItemBase {
         if (description != null && description.size() != 0 && !description.get(0).equals("laceholder descriptio"))
             lore.addAll(description);
 
+        for (String s : lore) lore.set(lore.indexOf(s), s.replaceAll(";", ""));
+
         /*
           Ability
          */
@@ -352,7 +379,7 @@ public class ItemBase {
             lore.add("" + ChatColor.WHITE + ChatColor.BOLD + rarity.toUpperCase());
 
         if (reforge != Reforge.NONE)
-            meta.setDisplayName(nameColor + StringUtils.capitalize(reforge.toString().toLowerCase()) + " " + name);
+            meta.setDisplayName(nameColor + StringUtils.capitalize(reforge.toString().toLowerCase()) + (isThick ? " Thick " : " ") + name);
         else meta.setDisplayName(name);
 
         meta.setLore(lore);
@@ -388,6 +415,8 @@ public class ItemBase {
         }
 
         nbt.setBoolean("reforgeable", reforgeable);
+        nbt.setBoolean("appliedCritical", appliedCritical);
+        nbt.setBoolean("isThick", isThick);
         List<String> enchantmentNbt = new ArrayList<>();
         for (ItemEnchantment enchantment : this.enchantments) {
             enchantmentNbt.add(enchantment.getLevel() + ";" + enchantment.getBaseEnchantment().getName());
@@ -549,12 +578,6 @@ public class ItemBase {
     public static ItemStack reforge(ItemStack stack, Reforge reforge) {
         ItemBase base = new ItemBase(stack);
 
-        Rarity r = base.getRarityEnum();
-
-        for (SkyblockStat stat : base.getReforge().getReforgeData(r).getStats().keySet()) {
-            base.setStat(stat, base.getStat(stat) - base.getReforge().getReforgeData(r).getStats().get(stat));
-        }
-
         base.createStack();
 
         base.setReforge(reforge);
@@ -579,15 +602,96 @@ public class ItemBase {
 
     public boolean regenerate() {
         SkyblockItemHandler handler = Skyblock.getPlugin().getSkyblockItemHandler();
-        if (handler != null) {
-            if (handler.isRegistered(orig)) {
-                handler.getRegistered(orig).onRegenerate(this);
+        if (handler != null && handler.isRegistered(orig)) {
+            handler.getRegistered(orig).onRegenerate(this);
 
-                return true;
-            }
+            return true;
         }
 
         return false;
+    }
+
+    public void maxItem() {
+        boolean isSword = this.rarity.toUpperCase().contains("SWORD");
+        boolean isArmor = this.rarity.toUpperCase().contains("HELMET") || this.rarity.toUpperCase().contains("CHESTPLATE") || this.rarity.toUpperCase().contains("LEGGINGS") || this.rarity.toUpperCase().contains("BOOTS");
+        boolean isRanged = this.rarity.toUpperCase().contains("BOW");
+        boolean isHelmet = this.rarity.toUpperCase().contains("HELMET");
+        boolean isBoots = this.rarity.toUpperCase().contains("BOOTS");
+
+        SkyblockEnchantmentHandler enchantmentHandler = Skyblock.getPlugin().getEnchantmentHandler();
+
+        List<SkyblockEnchantment> enchantments = new ArrayList<>();
+
+        if (isSword) {
+            enchantments.addAll(enchantmentHandler.getEnchantments("sword"));
+
+            this.setReforge(Reforge.SPICY);
+        } else if (isHelmet) {
+            enchantments.addAll(enchantmentHandler.getEnchantments("helmet"));
+
+            this.setReforge(Reforge.FIERCE);
+        } else if (isBoots) {
+            enchantments.addAll(enchantmentHandler.getEnchantments("boots"));
+
+            this.setReforge(Reforge.FIERCE);
+        } else if (isArmor) {
+            enchantments.addAll(enchantmentHandler.getEnchantments("armor"));
+
+            this.setReforge(Reforge.FIERCE);
+        } else if (isRanged) {
+            enchantments.addAll(enchantmentHandler.getEnchantments("bow"));
+
+            this.setReforge(Reforge.RAPID);
+        }
+
+        for (SkyblockEnchantment enchantment : enchantments) {
+            this.addEnchantment(enchantment.getName(), enchantment.getMaxLevel());
+        }
+
+        this.createStack();
+    }
+
+    public int getIntelligence() {
+        return intelligence + getReforgeStat(SkyblockStat.MANA);
+    }
+
+    public int getAttackSpeed() {
+        return attackSpeed + getReforgeStat(SkyblockStat.ATTACK_SPEED);
+    }
+
+    public int getCritChance() {
+        return critChance + getReforgeStat(SkyblockStat.CRIT_CHANCE);
+    }
+
+    public int getCritDamage() {
+        return critDamage + getReforgeStat(SkyblockStat.CRIT_DAMAGE);
+    }
+
+    public int getStrength() {
+        return strength + getReforgeStat(SkyblockStat.STRENGTH);
+    }
+
+    public int getDefense() {
+        return defense + getReforgeStat(SkyblockStat.DEFENSE);
+    }
+
+    public int getHealth() {
+        return health + getReforgeStat(SkyblockStat.HEALTH);
+    }
+
+    public int getDamage() {
+        return damage + getReforgeStat(SkyblockStat.DAMAGE);
+    }
+
+    public int getSpeed() {
+        return speed + getReforgeStat(SkyblockStat.SPEED);
+    }
+
+    private int getReforgeStat(SkyblockStat stat) {
+        if (reforge == null) return 0;
+        if (reforge.getReforgeData(rarityEnum) == null) return 0;
+
+        return reforge.getReforgeData(rarityEnum).get(stat);
     }
 
 }

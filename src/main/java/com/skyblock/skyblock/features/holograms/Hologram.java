@@ -3,8 +3,13 @@ package com.skyblock.skyblock.features.holograms;
 import com.skyblock.skyblock.Skyblock;
 import com.skyblock.skyblock.utilities.Util;
 import lombok.Data;
+import net.citizensnpcs.api.CitizensAPI;
+import net.citizensnpcs.api.npc.NPC;
+import net.citizensnpcs.trait.ArmorStandTrait;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.EntityType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,6 +25,11 @@ public class Hologram {
 
     public Hologram(String location, String lines) {
         this.location = new Location(Skyblock.getSkyblockWorld(), Double.parseDouble(location.split(",")[0]), Double.parseDouble(location.split(",")[1]), Double.parseDouble(location.split(",")[2]));
+
+        if (location.contains("world")) {
+            this.location.setWorld(Bukkit.getWorld(location.split("world:")[1]));
+        }
+
         this.lines = Arrays.asList(Util.buildLore(lines));
     }
 
@@ -31,14 +41,13 @@ public class Hologram {
             String line = lines.get(i);
             if (i > 0) loc.add(0, -0.25, 0);
 
-            ArmorStand stand = loc.getWorld().spawn(loc, ArmorStand.class);
-            stand.setGravity(false);
-            stand.setCustomName(line);
-            stand.setCustomNameVisible(true);
-            stand.setVisible(false);
-            stand.setMarker(true);
+            NPC npc = CitizensAPI.getNPCRegistry().createNPC(EntityType.ARMOR_STAND, line, loc);
+            npc.spawn(loc);
 
-            stands.add(stand);
+            ArmorStandTrait trait = npc.getOrAddTrait(ArmorStandTrait.class);
+            trait.setGravity(false);
+            trait.setVisible(false);
+            trait.setMarker(true);
         }
     }
 

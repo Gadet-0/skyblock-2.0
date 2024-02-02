@@ -2,7 +2,9 @@ package com.skyblock.skyblock;
 
 import com.connorlinfoot.actionbarapi.ActionBarAPI;
 import com.skyblock.skyblock.enums.SkyblockStat;
-import com.skyblock.skyblock.event.SkyblockCoinsChangeEvent;
+import com.skyblock.skyblock.events.SkyblockPlayerCoinUpdateEvent;
+import com.skyblock.skyblock.events.SkyblockPlayerDamageByEntityEvent;
+import com.skyblock.skyblock.events.SkyblockPlayerItemHeldChangeEvent;
 import com.skyblock.skyblock.features.auction.AuctionCategory;
 import com.skyblock.skyblock.features.auction.AuctionSettings;
 import com.skyblock.skyblock.features.auction.gui.AuctionCreationGUI;
@@ -11,9 +13,12 @@ import com.skyblock.skyblock.features.collections.Collection;
 import com.skyblock.skyblock.features.entities.SkyblockEntity;
 import com.skyblock.skyblock.features.island.IslandManager;
 import com.skyblock.skyblock.features.items.ArmorSet;
+import com.skyblock.skyblock.features.items.SkyblockItem;
 import com.skyblock.skyblock.features.location.SkyblockLocation;
 import com.skyblock.skyblock.features.merchants.Merchant;
+import com.skyblock.skyblock.features.minions.MinionHandler;
 import com.skyblock.skyblock.features.npc.NPC;
+import com.skyblock.skyblock.features.npc.NPCHandler;
 import com.skyblock.skyblock.features.objectives.Objective;
 import com.skyblock.skyblock.features.objectives.QuestLine;
 import com.skyblock.skyblock.features.pets.Pet;
@@ -24,16 +29,23 @@ import com.skyblock.skyblock.features.skills.Skill;
 import com.skyblock.skyblock.features.slayer.SlayerHandler;
 import com.skyblock.skyblock.features.slayer.SlayerQuest;
 import com.skyblock.skyblock.features.slayer.SlayerType;
+import com.skyblock.skyblock.sql.SQLConfiguration;
 import com.skyblock.skyblock.utilities.BossBar;
 import com.skyblock.skyblock.utilities.SkyblockMath;
 import com.skyblock.skyblock.utilities.Util;
 import com.skyblock.skyblock.utilities.item.ItemBase;
 import de.tr7zw.nbtapi.NBTEntity;
+import de.tr7zw.nbtapi.NBTItem;
 import lombok.Data;
+import net.minecraft.server.v1_8_R3.ChatComponentText;
+import net.minecraft.server.v1_8_R3.IChatBaseComponent;
+import net.minecraft.server.v1_8_R3.PacketPlayOutPlayerListHeaderFooter;
 import org.bukkit.*;
 import org.bukkit.block.Block;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.craftbukkit.v1_8_R3.entity.CraftPlayer;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -46,23 +58,29 @@ import org.bukkit.util.Vector;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.sql.*;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Data
 public class SkyblockPlayer {
 
     private HashMap<String, Object> dataCache;
-
+    private List<String> cacheChanged;
     private List<BiFunction<SkyblockPlayer, Entity, Integer>> predicateDamageModifiers;
+    private List<MinionHandler.MinionSerializable> minions;
     private AuctionCreationGUI.AuctionProgress progress;
     private HashMap<SkyblockStat, Double> stats;
     private HashMap<String, Boolean> cooldowns;
+    private HashMap<String, Integer> cooldownTimers;
     private HashMap<String, Object> extraData;
     private List<PotionEffect> activeEffects;
     private AuctionSettings auctionSettings;
-    private FileConfiguration config;
+    private SQLConfiguration config;
     private ArmorStand petDisplay;
     private BossBar bossBar;
     private Player bukkitPlayer;
@@ -102,13 +120,16 @@ public class SkyblockPlayer {
 
     private SkyblockPlayer(UUID uuid) {
         this.dataCache = new HashMap<>();
+        this.cacheChanged = new ArrayList<>();
         this.predicateDamageModifiers = new ArrayList<>();
         this.activeEffects = new ArrayList<>();
         this.bukkitPlayer = Bukkit.getPlayer(uuid);
         this.hand = Util.getEmptyItemBase();
         this.cooldowns = new HashMap<>();
+        this.cooldownTimers = new HashMap<>();
         this.extraData = new HashMap<>();
         this.stats = new HashMap<>();
+        this.minions = new ArrayList<>();
         this.petDisplay = null;
         this.damageModifier = 0;
         this.progress = null;
@@ -118,6 +139,7 @@ public class SkyblockPlayer {
 
         this.tick = 0;
 
+        // Default Extra Data
         this.extraData.put("fullSetBonus", false);
         this.extraData.put("fullSetBonusType", null);
 
@@ -126,6 +148,8 @@ public class SkyblockPlayer {
 
         this.extraData.put("last_location", null);
         this.extraData.put("dropOverrides", new HashMap<>());
+        this.extraData.put("isInteracting", false);
+        this.extraData.put("personalBankUsed", false);
 
         initConfig();
     }
@@ -142,7 +166,7 @@ public class SkyblockPlayer {
                 if (pet != null) pet.setActive(true);
             }
 
-            config = YamlConfiguration.loadConfiguration(configFile);
+            config = new SQLConfiguration(configFile, this);
 
             if (getValue("auction.auctionSettings") == null) {
                 auctionSettings = new AuctionSettings(AuctionCategory.WEAPON, AuctionSettings.AuctionSort.HIGHEST, null, AuctionSettings.BinFilter.ALL, false);
@@ -169,28 +193,71 @@ public class SkyblockPlayer {
             this.bossBar = new BossBar(bukkitPlayer);
         }
 
-        if (tick == 20) {
+        List<PotionEffect> effects = getActiveEffects();
+        StringBuilder activeEffectsString = new StringBuilder();
+
+        Function<Double, String> convertTicksToMinutes = (ticks) -> {
+            double minutes = ticks / 20 / 60;
+            if (minutes % 1 == 0) return String.valueOf((int) minutes);
+            return String.format("%.2f", Math.ceil(minutes));
+        };
+
+        for (PotionEffect effect : effects) {
+            activeEffectsString.append(PotionEffect.getMaxLevelsAndColors.get(effect.getName().toLowerCase()).getThird()).append(effect.getName()).append(" ").append(Util.toRoman(effect.getAmplifier())).append(" ").append(ChatColor.WHITE).append(convertTicksToMinutes.apply(effect.getDuration())).append(" Minutes\n");
+        }
+
+        String activeEffects = activeEffectsString.toString();
+        boolean hasActiveEffects = effects.size() > 0;
+
+        IChatBaseComponent header = new ChatComponentText(
+                ChatColor.AQUA + "You are" + ChatColor.RED + " " + ChatColor.BOLD + "NOT" + ChatColor.RESET + " " +  ChatColor.AQUA + "playing on " + ChatColor.YELLOW + "" + ChatColor.BOLD + "MC.HYPIXEL.NET\n");
+        IChatBaseComponent footer = new ChatComponentText(
+                "\n" + ChatColor.GREEN + "" + ChatColor.BOLD + "Active Effects\n" + "" +
+                        (hasActiveEffects ? ChatColor.GRAY + "        You have " + ChatColor.YELLOW + effects.size() + ChatColor.GRAY + " active effects. Use\n" + ChatColor.GRAY + "\"" + ChatColor.GOLD + "/effects" + ChatColor.GRAY + "\" to see them!\n" + activeEffects + "\n" : ChatColor.GRAY + "         No effects active. Drink potions or splash\n" + ChatColor.GRAY + "them on the ground to buff yourself!\n\n") +
+                        ChatColor.RED + "" + ChatColor.BOLD + "NO" + ChatColor.RESET + " " + ChatColor.GREEN + "Ranks, Boosters, & MORE!");
+
+        PacketPlayOutPlayerListHeaderFooter packet = new PacketPlayOutPlayerListHeaderFooter();
+
+        try {
+            Field headerField = packet.getClass().getDeclaredField("a");
+            Field footerField = packet.getClass().getDeclaredField("b");
+            headerField.setAccessible(true);
+            footerField.setAccessible(true);
+            headerField.set(packet, header);
+            footerField.set(packet, footer);
+            headerField.setAccessible(!headerField.isAccessible());
+            footerField.setAccessible(!footerField.isAccessible());
+        } catch (Exception ex) {
+            Skyblock.getPlugin().sendMessage("&cFailed to register tab list for &8" + getBukkitPlayer().getName() + "&c: &8" + ex.getMessage() + "&c!");
+        }
+
+        ((CraftPlayer) getBukkitPlayer()).getHandle().playerConnection.sendPacket(packet);
+
+        NPCHandler npcs = Skyblock.getPlugin().getNpcHandler();
+        if (tick == 20 && !npcs.getNPCs().containsKey("jerry_" + bukkitPlayer.getUniqueId())) {
             NPC jerry = new NPC("Jerry", true, false, true, Villager.Profession.FARMER,
                     new Location(Bukkit.getWorld(IslandManager.ISLAND_PREFIX + bukkitPlayer.getUniqueId()), 2.5, 100, 26.5),
                     (p) -> {
                         if (p.getUniqueId().equals(bukkitPlayer.getUniqueId())) {
-                            NPC.sendMessages(p, "Jerry",
-                                    "Your Skyblock island is part of a much larger universe",
-                                    "The Skyblock universe is full of islands to explore and resources to discover!",
-                                    "Use the Portal to warp to the first of those islands - The Skyblock Hub!");
+                            if (((List<String>) getValue("quests.completedObjectives")).contains("jerry")) {
+                                // Jerry GUI
+                            } else {
+                                NPC.sendMessages(p, "Jerry",
+                                        "Your Skyblock island is part of a much larger universe",
+                                        "The Skyblock universe is full of islands to explore and resources to discover!",
+                                        "Use the Portal to warp to the first of those islands - The Skyblock Hub!");
+                            }
                         } else {
                             NPC.sendMessage(p, "Jerry", "Jerry doesn't speak to strangers!", false);
                             p.playSound(p.getLocation(), Sound.VILLAGER_NO, 10, 1);
                         }
                     }, "", "");
 
-            Skyblock.getPlugin().getNpcHandler().registerNPC("jerry_" + bukkitPlayer.getUniqueId().toString(), jerry);
+            npcs.registerNPC("jerry_" + bukkitPlayer.getUniqueId().toString(), jerry);
             jerry.spawn();
         }
 
         if (tick % EVERY_SECOND == 0) {
-            board.updateScoreboard();
-
             ActionBarAPI.sendActionBar(getBukkitPlayer(), actionBar);
 
             if (getStatNoMult(SkyblockStat.MANA) < getStatNoMult(SkyblockStat.MAX_MANA) - ((getStatNoMult(SkyblockStat.MAX_MANA) + 100)/50)) {
@@ -199,25 +266,16 @@ public class SkyblockPlayer {
                 setStat(SkyblockStat.MANA, getStatNoMult(SkyblockStat.MAX_MANA));
             }
 
-            if (getQuestLine() != null) {
-                Objective objective = getQuestLine().getObjective(this);
-
-                if (objective != null) {
-                    bossBar.setMessage(ChatColor.WHITE + "Objective: " + ChatColor.YELLOW + objective.getDisplay() + " " + objective.getSuffix(this));
-                    bossBar.update();
-                } else {
-                    bossBar.reset();
-                }
-            } else {
-                bossBar.reset();
-            }
+            board.updateScoreboard();
         }
 
+        board.updateTitle();
+
         if (tick % EVERY_THREE_SECONDS == 0) {
-            if (getStatNoMult(SkyblockStat.HEALTH) < getStatNoMult(SkyblockStat.MAX_HEALTH) - (int) (1.5 + getStatNoMult(SkyblockStat.MAX_HEALTH) / 100)) {
-                updateHealth((int) (1.5 + getStatNoMult(SkyblockStat.MAX_HEALTH)/100));
+            if (getStat(SkyblockStat.HEALTH) < getStat(SkyblockStat.MAX_HEALTH) - (int) (1.5 + getStat(SkyblockStat.MAX_HEALTH) / 100)) {
+                updateHealth((int) (1.5 + getStat(SkyblockStat.MAX_HEALTH)/100));
             }else{
-                setStat(SkyblockStat.HEALTH, getStatNoMult(SkyblockStat.MAX_HEALTH));
+                setStat(SkyblockStat.HEALTH, getStat(SkyblockStat.MAX_HEALTH));
                 getBukkitPlayer().setHealth(getBukkitPlayer().getMaxHealth());
             }
         }
@@ -231,7 +289,22 @@ public class SkyblockPlayer {
                 updateStats(itemStack, hand);
             }
 
+            Bukkit.getPluginManager().callEvent(new SkyblockPlayerItemHeldChangeEvent(this, hand, itemStack));
+
             hand = itemStack;
+        }
+
+        if (getQuestLine() != null) {
+            Objective objective = getQuestLine().getObjective(this);
+
+            if (objective != null) {
+                bossBar.setMessage(ChatColor.WHITE + "Objective: " + ChatColor.YELLOW + objective.getDisplay() + " " + objective.getSuffix(this));
+                bossBar.update();
+            } else {
+                bossBar.reset();
+            }
+        } else {
+            bossBar.reset();
         }
 
         if (pet != null) {
@@ -372,13 +445,33 @@ public class SkyblockPlayer {
     public void damage(double damage, EntityDamageEvent.DamageCause cause, Entity attacker, boolean trueDamage) {
         double d = trueDamage ? damage : (damage - (damage * ((getStat(SkyblockStat.DEFENSE) / (getStat(SkyblockStat.DEFENSE) + 100F)))));
 
+        if (attacker != null && Util.isSkyblockEntity(attacker)) {
+            SkyblockEntity sentity = Skyblock.getPlugin().getEntityHandler().getEntity(attacker);
+            SkyblockPlayerDamageByEntityEvent e = new SkyblockPlayerDamageByEntityEvent(this, sentity, trueDamage, d);
+
+            Bukkit.getPluginManager().callEvent(e);
+
+            d = e.getDamage();
+            attacker = e.getEntity().getVanilla();
+        }
+
         if ((getStat(SkyblockStat.HEALTH) - d) <= 0) {
             kill(cause, attacker);
             return;
         }
 
+        getBukkitPlayer().damage(0);
         Util.setDamageIndicator(bukkitPlayer.getLocation(), ChatColor.GRAY + "" + Math.round(d), true);
         setStat(SkyblockStat.HEALTH, (int) (getStat(SkyblockStat.HEALTH) - d));
+    }
+
+    public void heal(int hp) {
+        if (getStat(SkyblockStat.HEALTH) < getStat(SkyblockStat.MAX_HEALTH) - hp) {
+            updateHealth(hp);
+        }else{
+            setStat(SkyblockStat.HEALTH, getStat(SkyblockStat.MAX_HEALTH));
+            getBukkitPlayer().setHealth(getBukkitPlayer().getMaxHealth());
+        }
     }
 
     public void kill(EntityDamageEvent.DamageCause cause, Entity killer) {
@@ -432,16 +525,21 @@ public class SkyblockPlayer {
             quest.fail();
         }
 
-        bukkitPlayer.setVelocity(new Vector(0, 0, 0));
         bukkitPlayer.setFallDistance(0.0f);
 
-        if (isOnIsland()) return;
+        if (isOnIsland()) {
+            bukkitPlayer.performCommand("warp home");
+            return;
+        }
 
         double sub = getDouble("stats.purse") / 2;
         bukkitPlayer.sendMessage(ChatColor.RED + "You died and lost " + Util.formatDouble(sub) + " coins!");
 
-        bukkitPlayer.performCommand("warp hub");
+        bukkitPlayer.teleport(Util.getSpawnLocation(getCurrentLocationName()));
+
         bukkitPlayer.playSound(bukkitPlayer.getLocation(), Sound.ZOMBIE_METAL, 1f, 2f);
+
+        Util.delay(() -> bukkitPlayer.setVelocity(new Vector(0, 0, 0)), 2);
 
         setValue("stats.purse", sub);
     }
@@ -509,7 +607,28 @@ public class SkyblockPlayer {
     public void setCooldown(String id, int secondsDelay) {
         cooldowns.put(id, false);
 
+        cooldownTimers.put(id, secondsDelay);
+
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                cooldownTimers.put(id, cooldownTimers.get(id) - 1);
+
+                if (cooldownTimers.get(id) == 0) cancel();
+            }
+        }.runTaskTimer(Skyblock.getPlugin(), 0, 20);
+
         delay(() -> cooldowns.put(id, true), secondsDelay);
+    }
+
+    public void sendOnCooldown(String id) {
+        int seconds = cooldownTimers.get(id);
+
+        getBukkitPlayer().sendMessage(ChatColor.RED + "This ability is on cooldown for " + Math.max(seconds, 1) + "s.");
+
+        if (getBoolValue("settings.abilityCooldownSounds")) {
+            getBukkitPlayer().playSound(getBukkitPlayer().getLocation(), Sound.ENDERMAN_TELEPORT, 10, 0);
+        }
     }
 
     public void delay(Runnable runnable, int delay) {
@@ -538,10 +657,21 @@ public class SkyblockPlayer {
     }
 
     public Object getValue(String path) {
-        if (tick == 0) return config.get(path);
         if (!dataCache.containsKey(path)) dataCache.put(path, config.get(path));
 
         return dataCache.get(path);
+    }
+
+    public int getIntValue(String path) {
+        return (int) getValue(path);
+    }
+
+    public String getStringValue(String path) {
+        return (String) getValue(path);
+    }
+
+    public boolean getBoolValue(String path) {
+        return (boolean) getValue(path);
     }
 
     public double getDouble(String path) {
@@ -550,20 +680,17 @@ public class SkyblockPlayer {
 
     public void setValue(String path, Object item) {
         dataCache.put(path, item);
+        if (!cacheChanged.contains(path)) cacheChanged.add(path);
+
         forEachStat((s) -> stats.put(s, getDouble("stats." + s.name().toLowerCase())));
 
-        if (path.equalsIgnoreCase("stats.purse")) Bukkit.getPluginManager().callEvent(new SkyblockCoinsChangeEvent(this));
+        if (path.equalsIgnoreCase("stats.purse")) Bukkit.getPluginManager().callEvent(new SkyblockPlayerCoinUpdateEvent(this));
     }
 
     public void saveToDisk() {
-        for (Map.Entry<String, Object> entry : dataCache.entrySet()) {
-            try {
-                config.set(entry.getKey(), entry.getValue());
-                config.save(configFile);
-                config = YamlConfiguration.loadConfiguration(configFile);
-            }catch (IOException e){
-                e.printStackTrace();
-            }
+        for (String path : cacheChanged) {
+            config.set(path, dataCache.get(path));
+            config.updateYamlFile();
         }
     }
 
@@ -583,10 +710,12 @@ public class SkyblockPlayer {
         File folder = new File(Skyblock.getPlugin(Skyblock.class).getDataFolder() + File.separator + "players");
         if (!folder.exists())  folder.mkdirs();
         configFile = new File(Skyblock.getPlugin(Skyblock.class).getDataFolder() + File.separator + "players" + File.separator + getBukkitPlayer().getUniqueId() + ".yml");
-        this.config = YamlConfiguration.loadConfiguration(configFile);
+        this.config = new SQLConfiguration(configFile, this);
         if (!configFile.exists()) {
             try {
                 configFile.createNewFile();
+
+                config.initializeUUID();
 
                 forEachStat((s) -> {
                     config.set("stats." + s.name().toLowerCase(), 0);
@@ -603,6 +732,8 @@ public class SkyblockPlayer {
 
                 config.set("stats.purse", 0.0);
 
+                config.set("collection.unlocked", 0);
+
                 for (Collection collection : Collection.getCollections()) {
                     config.set("collection." + collection.getName().toLowerCase() + ".level", 0);
                     config.set("collection." + collection.getName().toLowerCase() + ".exp", 0);
@@ -612,6 +743,7 @@ public class SkyblockPlayer {
                 config.set("bank.balance", 0.0);
                 config.set("bank.interest", 2);
                 config.set("bank.recent_transactions", new ArrayList<>());
+                config.set("bank.personal.cooldown", -1); // -1 = not aquired
 
                 for (String skill : Skill.SKILLS) {
                     config.set("skill." + skill.toLowerCase() + ".exp", 0.0);
@@ -651,17 +783,61 @@ public class SkyblockPlayer {
                 config.set("quests.completedObjectives", new ArrayList<>());
                 config.set("quests.introduceYourself.talkedTo", new ArrayList<>());
                 config.set("quests.timber.logsBroken", 0);
+                config.set("quests.timber.birchLogsBroken", 0);
                 config.set("quests.timber.talkedToLumberjack", false);
+                config.set("quests.intothewoods.darkOakLogsBroken", 0);
                 config.set("quests.time_to_strike.bartender.interacted", false);
                 config.set("quests.time_to_strike.zombiesKilled", 0);
+                config.set("quests.lost_and_found.talkedToLazyMiner", false);
+                config.set("quests.lost_and_found.talkedToRusty", false);
+                config.set("quests.lost_and_found.mined", 0);
+                config.set("quests.lost_and_found.foundPickaxe", false);
 
                 config.set("locations.found", new ArrayList<>());
-
                 config.set("potions.active", new HashMap<>());
-
                 config.set("recipes.unlocked", new ArrayList<>());
+                config.set("trades.unlocked", new ArrayList<>());
 
-                config.save(configFile);
+                config.set("settings.doubleTapDrop", false);
+                config.set("settings.rightClickProfiles", true);
+                config.set("settings.abilityCooldownSounds", true);
+                config.set("settings.rareDropSounds", true);
+                config.set("settings.menuSounds", true);
+                config.set("settings.romanSkillNumerals", true);
+                config.set("settings.dynamicSlayerSidebar", true);
+                config.set("settings.romanNumerals", true);
+                //config.set("settings.skyblockLevelsChat", true);
+                config.set("settings.zonesActionBar", true);
+                config.set("settings.abilityChat", true);
+                config.set("settings.abilityCooldownChat", true);
+                config.set("settings.compactChat", true);
+                config.set("settings.seaCreatureChat", true);
+                config.set("settings.tradeRequests", true);
+                config.set("settings.inventoryFullNotif", true);
+                config.set("settings.arrowPickupFullQuiver", true);
+                config.set("settings.deathMessages", true);
+                config.set("settings.bidNotif", true);
+                config.set("settings.outbidNotif", true);
+                config.set("settings.bidNotif", true);
+                config.set("settings.bazaarFillNotif", true);
+                config.set("settings.guestingInvites", true);
+                config.set("settings.guestingNotif", true);
+                config.set("settings.coopInvites", true);
+                config.set("settings.coopTravelNotif", true);
+
+                config.set("harp.hymn_to_the_joy.best", 0);
+                config.set("harp.frere_jaques.best", -1);
+                config.set("harp.amazing_grace.best", -1);
+                config.set("harp.brahms_lullaby.best", -1);
+                config.set("harp.happy_birthday_to_you.best", -1);
+                config.set("harp.greensleeves.best", -1);
+                config.set("harp.geothermy.best", -1);
+                config.set("harp.minuet.best", -1);
+                config.set("harp.joy_to_the_world.best", -1);
+                config.set("harp.godly_imagination.best", -1);
+                config.set("harp.la_vie_en_rose.best", -1);
+
+                config.updateYamlFile();
 
                 Bukkit.getConsoleSender().sendMessage("Config finished: " + config + "");
             } catch (IOException e){
@@ -744,7 +920,7 @@ public class SkyblockPlayer {
         return getDouble("stats.purse");
     }
 
-    public boolean hasActiveSlayer() { return Skyblock.getPlugin().getSlayerHandler().getSlayer(bukkitPlayer) != null; }
+    public boolean hasActiveSlayer() { return Skyblock.getPlugin().getSlayerHandler().getSlayer(bukkitPlayer).getQuest() != null; }
 
     public SlayerHandler.SlayerData getActiveSlayer() {
         return Skyblock.getPlugin().getSlayerHandler().getSlayer(bukkitPlayer);
@@ -776,6 +952,7 @@ public class SkyblockPlayer {
 
     public void addPet(ItemStack pet) {
         ArrayList<ItemStack> pets = getPets();
+
         pets.add(pet);
 
         setValue("pets.pets", pets);
@@ -783,7 +960,30 @@ public class SkyblockPlayer {
 
     public void removePet(ItemStack pet) {
         ArrayList<ItemStack> pets = getPets();
-        pets.remove(pet);
+
+        for (ItemStack item : pets) {
+            NBTItem nbt = new NBTItem(item);
+            if (nbt.getString("uuid").equals(new NBTItem(pet).getString("uuid"))) {
+                pets.remove(item);
+                break;
+            }
+        }
+
+        setValue("pets.pets", pets);
+    }
+
+    public void replacePet(ItemStack old, ItemStack newPet) {
+        ArrayList<ItemStack> pets = getPets();
+
+        int index = 0;
+        for (int i = 0; i < pets.size(); i++) {
+            if (new NBTItem(pets.get(i)).getString("uuid").equals(new NBTItem(newPet).getString("uuid"))) {
+                index = i;
+                break;
+            }
+        }
+
+        pets.set(index, newPet);
 
         setValue("pets.pets", pets);
     }
@@ -843,6 +1043,9 @@ public class SkyblockPlayer {
             this.setValue("potions.active." + activeEffect.getName() + ".duration", activeEffect.getDuration());
         }
 
+        this.setValue("island.minions", getMinions());
+        this.setValue("island.last_login", System.currentTimeMillis());
+
         saveToDisk();
 
         playerRegistry.remove(getBukkitPlayer().getUniqueId());
@@ -890,6 +1093,102 @@ public class SkyblockPlayer {
         }
 
         return false;
+    }
+
+    public void removeFromQuiver() {
+        Set<String> slots = ((ConfigurationSection) getValue("bag.quiver.items")).getKeys(false);
+        List<String> list = new ArrayList<>(slots);
+
+        Collections.reverse(list);
+
+        for (String slot : list) {
+            ItemStack item = ((ItemStack) getValue("bag.quiver.items." + slot)).clone();
+            if (!item.getType().equals(Material.AIR)) {
+                if (item.getAmount() == 1) {
+                    setValue("bag.quiver.items." + slot, new ItemStack(Material.AIR));
+                } else {
+                    item.setAmount(item.getAmount() - 1);
+                    setValue("bag.quiver.items." + slot, item);
+
+                }
+                break;
+            }
+        }
+    }
+
+    public int getQuiverAmount(Material... types) {
+        if (!getBoolValue("bag.quiver.unlocked")) return 0;
+
+        List<ItemStack> arrows = Skyblock.getPlugin().getBagManager().getBagContents("quiver", this.getBukkitPlayer());
+
+        if (types.length != 0) arrows = arrows.stream().filter(item -> Arrays.asList(types).contains(item.getType())).collect(Collectors.toList());
+
+        int amount = 0;
+
+        for (ItemStack item : arrows) {
+            amount += item.getAmount();
+
+            if (amount >= 64) return 64;
+        }
+
+        return amount;
+    }
+
+    public ItemStack getNextQuiverItem() {
+        if (!getBoolValue("bag.quiver.unlocked")) return null;
+
+        Set<String> slots = ((ConfigurationSection) getValue("bag.quiver.items")).getKeys(false);
+        List<String> list = new ArrayList<>(slots);
+
+        Collections.reverse(list);
+
+        for (String slot : list) {
+            ItemStack item = ((ItemStack) getValue("bag.quiver.items." + slot)).clone();
+            if (!item.getType().equals(Material.AIR)) {
+                return item;
+            }
+        }
+
+        return null;
+    }
+
+    public boolean isTalkingToNPC() { return (boolean) extraData.get("isInteracting"); }
+
+    public void loadCache() {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                try {
+                    Class.forName("org.sqlite.JDBC");
+                    Connection connection = DriverManager.getConnection("jdbc:sqlite:" + SQLConfiguration.f.getAbsolutePath());
+
+                    DatabaseMetaData metaData = connection.getMetaData();
+                    ResultSet resultSet = metaData.getColumns(null, null, "players", null);
+
+                    List<String> columns = new ArrayList<>();
+
+                    while (resultSet.next()) {
+                        String columnName = resultSet.getString("COLUMN_NAME");
+                        columns.add(columnName);
+                    }
+
+                    int i = 0;
+                    for (String column : columns) {
+                        column = column.replaceAll("__", " ").replaceAll("_", ".");
+                        if (dataCache.containsKey(column)) continue;
+
+                        String finalColumn = column;
+                        Util.delay(() -> {
+                            dataCache.put(finalColumn, config.get(finalColumn));
+                        }, i * 5);
+
+                        i++;
+                    }
+                } catch (SQLException | ClassNotFoundException e) {
+                    e.printStackTrace();
+                }
+            }
+        }.runTaskLaterAsynchronously(Skyblock.getPlugin(), 20);
     }
 
 }

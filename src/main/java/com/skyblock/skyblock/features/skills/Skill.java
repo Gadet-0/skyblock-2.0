@@ -3,9 +3,11 @@ package com.skyblock.skyblock.features.skills;
 import com.skyblock.skyblock.Skyblock;
 import com.skyblock.skyblock.SkyblockPlayer;
 import com.skyblock.skyblock.enums.SkyblockStat;
+import com.skyblock.skyblock.events.SkyblockPlayerSkillXPChangeEvent;
 import com.skyblock.skyblock.features.pets.Pet;
 import com.skyblock.skyblock.utilities.Util;
 import lombok.Getter;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Sound;
 import org.bukkit.inventory.ItemStack;
@@ -75,9 +77,17 @@ public abstract class Skill {
         skill.update(player, (int) (curr));
         player.getBukkitPlayer().playSound(player.getBukkitPlayer().getLocation(), Sound.ORB_PICKUP, 1f, 2f);
 
+        Bukkit.getPluginManager().callEvent(new SkyblockPlayerSkillXPChangeEvent(skill, player, xp));
+
         Pet pet = player.getPet();
 
         if (pet != null) {
+            pet.unequip(player);
+            pet.setInGui(true);
+            player.removePet(pet.toItemStack());
+            player.setValue("pets.equip", null);
+            pet.setInGui(false);
+
             double petXp = (pet.getSkill().equals(skill)) ? xp : xp / 4;
 
             if (!pet.getSkill().equals(skill)) {
@@ -90,9 +100,6 @@ public abstract class Skill {
                 }
             }
 
-            player.removePet(pet.toItemStack());
-            player.setValue("pets.equip", null);
-
             int prevLevel = Pet.getLevel(pet.getXp(), pet.getRarity());
             pet.setXp(pet.getXp() + petXp);
             int level = Pet.getLevel(pet.getXp(), pet.getRarity());
@@ -101,6 +108,7 @@ public abstract class Skill {
                 player.getBukkitPlayer().sendMessage(ChatColor.GREEN + "Your " + pet.getColoredName() + ChatColor.GREEN + " levelled up to level " + ChatColor.BLUE + level + ChatColor.GREEN + "!");
             }
 
+            pet.equip(player);
             player.addPet(pet.toItemStack());
             player.setValue("pets.equip", pet.toItemStack());
         }
@@ -144,31 +152,33 @@ public abstract class Skill {
 
     public void update(SkyblockPlayer player, int prev) {
         int prevLevel = getLevel(prev);
-        int level = getLevel(getXP(player));
+        int newLevel = getLevel(getXP(player));
 
-        if (level > prevLevel) {
-            player.getBukkitPlayer().playSound(player.getBukkitPlayer().getLocation(), Sound.LEVEL_UP, 1f, 1f);
+        if (newLevel > prevLevel) {
+            for (int level = prevLevel + 1; level <= newLevel; level++) {
+                player.getBukkitPlayer().playSound(player.getBukkitPlayer().getLocation(), Sound.LEVEL_UP, 1f, 1f);
 
-            StringBuilder builder = new StringBuilder();
-            builder.append(ChatColor.DARK_AQUA).append(ChatColor.BOLD).append("▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n");
-            builder.append(ChatColor.AQUA).append(ChatColor.BOLD).append("  SKILL LEVEL UP ").append(ChatColor.RESET).append(ChatColor.DARK_AQUA).append(getName()).append(" ");
+                StringBuilder builder = new StringBuilder();
+                builder.append(ChatColor.DARK_AQUA).append(ChatColor.BOLD).append("▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n");
+                builder.append(ChatColor.AQUA).append(ChatColor.BOLD).append("  SKILL LEVEL UP ").append(ChatColor.RESET).append(ChatColor.DARK_AQUA).append(getName()).append(" ");
 
-            if (prevLevel != 0)  builder.append(ChatColor.DARK_GRAY).append(Util.toRoman(prevLevel)).append("➜");
-            builder.append(ChatColor.DARK_AQUA).append(Util.toRoman(level)).append("\n");
-            builder.append(" \n");
-            builder.append(ChatColor.GREEN).append(ChatColor.BOLD).append("  REWARDS\n");
-            builder.append(ChatColor.YELLOW).append("   ").append(getAlternate()).append(" ").append(Util.toRoman(level)).append("\n");
+                if (prevLevel != 0) builder.append(ChatColor.DARK_GRAY).append(Util.toRoman(prevLevel)).append("➜");
+                builder.append(ChatColor.DARK_AQUA).append(Util.toRoman(level)).append("\n");
+                builder.append(" \n");
+                builder.append(ChatColor.GREEN).append(ChatColor.BOLD).append("  REWARDS\n");
+                builder.append(ChatColor.YELLOW).append("   ").append(getAlternate()).append(" ").append(Util.toRoman(level)).append("\n");
 
-            for (String s : getRewards(level, prevLevel)) {
-                builder.append("   ").append(s).append("\n");
+                for (String s : getRewards(level, prevLevel)) {
+                    builder.append("   ").append(s).append("\n");
+                }
+                builder.append(ChatColor.DARK_GRAY).append("   +").append(ChatColor.GOLD).append(Util.formatInt(COINS.get(level))).append(ChatColor.GRAY).append(" Coins");
+
+                builder.append("\n").append(ChatColor.DARK_AQUA).append(ChatColor.BOLD).append("▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬");
+                player.addCoins(COINS.get(level));
+                player.getBukkitPlayer().sendMessage(builder.toString());
+
+                levelUp(player, level);
             }
-            builder.append(ChatColor.DARK_GRAY).append("   +").append(ChatColor.GOLD).append(Util.formatInt(COINS.get(level))).append(ChatColor.GRAY).append(" Coins");
-
-            builder.append("\n").append(ChatColor.DARK_AQUA).append(ChatColor.BOLD).append("▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬");
-            player.addCoins(COINS.get(level));
-            player.getBukkitPlayer().sendMessage(builder.toString());
-
-            levelUp(player, level);
         }
     }
 

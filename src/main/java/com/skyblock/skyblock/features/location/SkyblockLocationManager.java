@@ -2,8 +2,10 @@ package com.skyblock.skyblock.features.location;
 
 import com.skyblock.skyblock.Skyblock;
 import com.skyblock.skyblock.utilities.Util;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.block.Biome;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -36,21 +38,19 @@ public class SkyblockLocationManager {
         if (LOCATIONS_CACHE.isEmpty()) {
             for (String name : this.getLocations()) {
                 Location pos1 = (Location) getField(name, "pos1");
-                pos1.setWorld(Skyblock.getSkyblockWorld());
 
                 Location pos2 = (Location) getField(name, "pos2");
-                pos2.setWorld(Skyblock.getSkyblockWorld());
 
                 temp = new SkyblockLocation(pos1, pos2, ChatColor.valueOf(((String) getField(name, "color")).toUpperCase()), (String) getField(name, "name"), (int) getField(name, "weight"));
 
                 LOCATIONS_CACHE.add(temp);
 
-                if (Util.inCuboid(location, temp.getPosition1(), temp.getPosition2())) found.add(temp);
+                if (Util.inCuboid(location, temp.getPosition1(), temp.getPosition2()) && location.getWorld().equals(pos1.getWorld())) found.add(temp);
                 else temp = null;
             }
         } else {
             for (SkyblockLocation skyblockLocation : LOCATIONS_CACHE) {
-                if (Util.inCuboid(location, skyblockLocation.getPosition1(), skyblockLocation.getPosition2())) found.add(skyblockLocation);
+                if (Util.inCuboid(location, skyblockLocation.getPosition1(), skyblockLocation.getPosition2()) && location.getWorld().equals(skyblockLocation.getPosition1().getWorld())) found.add(skyblockLocation);
             }
         }
 
@@ -61,6 +61,15 @@ public class SkyblockLocationManager {
             else {
                 if (loc.getWeight() > temp.getWeight()) temp = loc;
             }
+        }
+
+        if (temp.getName().equals("The Park")) {
+            Biome biome = location.getBlock().getBiome();
+            if (biome.equals(Biome.BIRCH_FOREST)) temp = new SkyblockLocation(temp.getPosition1(), temp.getPosition2(), ChatColor.GREEN, "Birch Park", temp.getWeight() + 1);
+            if (biome.equals(Biome.ICE_PLAINS) || biome.equals(Biome.SWAMPLAND) || biome.equals(Biome.TAIGA)) temp = new SkyblockLocation(temp.getPosition1(), temp.getPosition2(), ChatColor.GREEN, "Spruce Woods", temp.getWeight() + 1);
+            if (biome.equals(Biome.ROOFED_FOREST)) temp = new SkyblockLocation(temp.getPosition1(), temp.getPosition2(), ChatColor.GREEN, "Dark Thicket", temp.getWeight() + 1);
+            if (biome.equals(Biome.SAVANNA)) temp = new SkyblockLocation(temp.getPosition1(), temp.getPosition2(), ChatColor.GREEN, "Savanna Woodland", temp.getWeight() + 1);
+            if (biome.equals(Biome.JUNGLE)) temp = new SkyblockLocation(temp.getPosition1(), temp.getPosition2(), ChatColor.GREEN, "Jungle Island", temp.getWeight() + 1);
         }
 
         return temp;
@@ -82,10 +91,8 @@ public class SkyblockLocationManager {
 
     public SkyblockLocation getLocation(String name) {
         Location pos1 = (Location) getField(name, "pos1");
-        pos1.setWorld(Skyblock.getSkyblockWorld());
 
         Location pos2 = (Location) getField(name, "pos2");
-        pos2.setWorld(Skyblock.getSkyblockWorld());
 
         return new SkyblockLocation(
                 pos1,
